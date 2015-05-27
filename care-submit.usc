@@ -1,0 +1,1509 @@
+'******************************************************************************
+'           The Gulf Coast Center
+'
+' care-submit - This script generates the CARE Batch file for submission to the
+'       state
+'
+' NAME: care-submit
+' DATE: 03/05/2007
+' AUTHOR: Robert Hoffmann
+' REQUESTOR: Robert Dorris
+'------------------------------------------------------------------------------
+' MODIFICATIONS:
+'  03/05/07 by Robert Hoffmann
+'     Set Script Structure and Registration Piece
+' 07/15/2009 by Carlos Caldera
+' added new registration fields to hold correspondence information in the dbread
+' correspondence information added to following records:
+'  In new registration records 04 and 05
+'  In change registration records 04, 05 and 06
+'
+'RLE 20100127 ~ changed password
+'             ~ removed FTP loops to avoid password resets
+'             + enabled local archive on UNIX
+'RLE 20100218 yet another password change
+'RLE 20100519 pw change
+'RLE 20100517 added support for R01A HCS locations based on staff id
+'             added debug code for testing in an alternate MIS
+'             added p_ftp var and logic to disable FTP when not in production
+'RLE 20100729 pw change
+'RLE 20101028 pw change
+'RLE 20101209 .008 cleanup comments
+'RLE 20101217 01.2.000 - major changes:
+'  - string concatination
+'  - code structure
+'  - tabs-to-spaces
+'  - removed unnecessary junk
+'  - aligned comments for the file formats
+'RLE 20110121 .2.001
+'  - continue code cleanup
+'  - Add family size and income fields
+'  - Add StrPad() function for consistent padding of the line when changes are made
+'  - replace $format() with shorthand $fmt()
+'RLE 20110124 .2.002
+'  - added to[] array for easier emailing when testing
+'  - pw change
+'RLE 20110125 .2.003
+'  - Adjusted income formatting to not include a decimal
+'  - removed commented trailing filler statements.  StrPad works.
+'RLE 20110425 .2.004 pw change
+'RLE 20110722 .005
+'  - moved all ftp constants to a parmfile
+'  - see all the P_* vars
+'  - parmfile "CARECONT" updated
+'  - added CN_DefaultParm for safety.
+'  - v.005b added Tim to the notification
+'RLE 20110926 .006
+'  - added batching of 1st follow-up service data
+'  - removed hard-coded "tempbatch" use
+'  - include app-notify group
+'  - added archivepath constant
+'RLE 20111003 .007
+'  - CN_PRODSYS to CN_ProdSys
+'  - add constant CN_FSStartDate to prevent batching of old records
+'  - add bed days and FS-related vars
+'  - add logic to email a summary of the FS records sent
+'  - add FS record counts to interactive display and emails
+'  - adjust FS selection logic to only look at records with a fsdate and code
+'RLE 20111005 .008
+'  - adjust logic to stop FIRSTSERV loop only when fsdate is DP
+'  - include 'Notify' email address in FS notification as well.
+'RLE 20111007 .009
+'  - change count vars to numeric.  Binary is hitting the 32k limit
+'  - start client ID reads at 000102 and after to skip testing clients
+'RLE 20120425 .010
+'  - format CBA location to 4 characters for R01A HCS
+
+
+' ** TODO ***********************************************************
+'  - have a way to skip clients such as SA who don't need to be in CARE
+'  - continue cleanup
+'  - test
+'  - consider using the unix fold command for line formatting to 80 chrs
+'    in lieu of extensive script changes
+'    eg: fold -bw80 inFile > outFile
+
+' *******************************************************************
+' {{{ ABBREV
+' RLE - Robert Edeker
+' }}}
+'------------------------------------------------------------------------------
+%version 01.2.010 04/25/12 GCC
+
+'''%debug compile
+
+%desc This script creates a file for CARE Record submission.
+%desc Includes Registration, Diagnosis and Community Based Assignments.
+
+%define DEBUG_CLCOUNT 5
+
+%define CN_COMP "100"
+%define CN_ProdSys "/c0/MIS"
+%define CN_DefaultParm "CARECONT"
+%define CN_FSStartDate "10/10/2011"
+%define CN_ArchivePath "/c0/carebatch/care_files/"
+
+%define Notify "email@example.com"
+%define Notify2 "email2@example.com"
+
+start care-submit(parmfile, option, retcode)
+   '********* SCRIPT ARGUMENTS *************
+   parmfile          is x
+   option            is x     ' Parameters for script behavior (Separated by semicolon)
+                              ' Valid Options :
+   retcode           is b     ' Returned code for script execution (non-zero indicates error)
+   '********* SCRIPT VARIABLES *************
+   win               is b           ' User interface window variable
+   i                 is i           ' Index Variable
+   j                 is i           ' Index Variable
+   k                 is i           ' Index Variable
+   OK                is x           ' User Input Variable (Y/N)
+   test              is x           ' User Input Variable (Y/N) - Update Records
+   retcode1          is b           ' Return Code Variable
+   retcode2          is b           ' Return Code Variable
+   oneyear           is d           ' Test Value ( Today - 365 days )
+   batch-msgs[]      is x           ' Email Message Text Array
+   ClRegistered      is x           ' Y/N Flag indicating if Client Registration submitted
+   ClDiagnosed       is x           ' Y/N Flag indicating if client diagnosis submitted
+   ClNGMClose        is x           ' Y/N Flag indicating if a Client NGM close record submitted
+   client_id         is x           ' Client ID variable
+   ClCount           is n           ' Client Counter
+   TransCount        is n           ' Transaction Counter
+   RegCount          is n           ' Registration Record Counter
+   RegUpdtCount      is n           ' Registration Update Record Counter
+   DiagCount         is n           ' Diagnosis Record Counter
+   CBACount          is n           ' Community Based Assignment Counter
+   NGMCount          is n           ' New Generation Medication Counter
+   LockReg[]         is x           ' Array of Locked Register Ids
+   care_code         is x           ' Variable to translate DSM4 Codes to CARE Codes
+   cba_action        is x           ' CBA Action Code
+   ngm_action        is x           ' NGM Action Code
+   string            is x
+   areac             is x
+   extention         is x
+   pnum              is x
+   to[]              is x
+   '********* OUTPUT VARIABLES *************
+   BatchFile         is b           ' CARE Batch File Handle Number
+   BatchFilename     is x           ' CARE Batch File Name
+   OutRec            is x           ' Output Record
+   '********* FTP VARIABLES *************
+   ftp-msg[]         is x           ' FTP Output Messages
+   ftpcmds[]         is x           ' FTP Commands to execute
+   unix-cmd          is x           ' Unix Command String
+   unix-msg[]        is x           ' Output String for Unix Commands
+   unix-msg2[]       is x           ' Output String for Unix Commands
+   '********* LIBRARY VARIABLES ***********
+   lib_email         is b           ' Function to email files
+   '********* DST VARIABLES *************
+   c_reg_ssn         is n           ' Client Social Security Number
+   c_reg_city        is x           ' Client Address - City
+   c_cb_svclc        is x           ' CBA Service Location - Text Variable
+   ' Registration Record
+   c.reg.sub         is d           ' Registration Record Submit Date
+   c.reg.hdr         is h           ' Registration Record Header Field
+   c.reg.subdt       is d           ' Registration Update Submit Date
+   c.reg.force       is x           ' Y/N field to force Registration Update Record Submission
+   c.reg.exclude     is x           ' Y/N field to exclude Registration Update Record submission
+   c.reg.uid         is x           ' Unique Record ID for Registration Record
+   c.reg.dt          is d           ' Registration Date
+   c.reg.pp          is x           ' Presenting Problem ( Axis 1 or 2)
+   c.reg.ln          is x           ' Client Last Name
+   c.reg.sufx        is x           ' Client Name Suffix
+   c.reg.fn          is x           ' Client First Name
+   c.reg.mn          is x           ' Client Middle Name
+   c.reg.sex         is x           ' Client Gender
+   c.reg.eth         is x           ' Client Ethnicity
+   c.reg.bd          is d           ' Client Birth Date
+   c.reg.ssn         is x           ' Client Social Security Number
+   c.reg.street      is x           ' Client Address - Street
+   c.reg.city        is x           ' Client Address - City
+   c.reg.cityd       is x           ' Client Address - City Description
+   c.reg.state       is x           ' Client Address - State
+   c.reg.zip         is x           ' Client Address - Zip Code
+   c.reg.county      is x           ' Client Address - County Code
+   c.reg.c.ln        is x           ' Previous Client Last Name
+   c.reg.c.fn        is x           ' Previous Client First Name
+   c.reg.chdt        is d           ' Registration Record Change Date???
+   ' correspondence information added 7/15/2009
+   c.reg.cor.fn      is x
+   c.reg.cor.ln      is x
+   c.reg.cor.str     is x
+   c.reg.cor.city    is x
+   c.reg.cor.state   is x
+   c.reg.cor.zip     is x
+   c.reg.cor.cityd   is x
+   c.reg.cor.phone   is x
+   c.reg.cor.rel     is x
+   'financial
+   c.reg.pp.fam      is b        ' family size
+   c.reg.pp.inc      is n        ' annual adjusted gross income
+
+   ' Diagnosis Record
+   c.dxrec           is header      ' Diagnosis Record Header
+   c.dx.caredt       is d           ' Diagnosis CARE Submission Date
+   c.dxdate          is d           ' Diagnosis Effective Date
+   c.dxaxi1mh        is x           ' Diagnosis Axis 1 Level 1
+   c.dxaxi2mh        is x           ' Diagnosis Axis 1 Level 2
+   c.dxaxi3mh        is x           ' Diagnosis Axis 1 Level 3
+   c.dxaxi4mh        is x           ' Diagnosis Axis 1 Level 4
+   c.dxaxi5mh        is x           ' Diagnosis Axis 1 Level 5
+   c.dxaxi6mh        is x           ' Diagnosis Axis 1 Level 6
+   c.dxreason        is x           ' Diagnosis Reason Code
+   c.dxaxis          is x           ' Diagnosis Primary Axis
+   c.dxaxii1         is x           ' Diagnosis Axis 2 Level 1
+   c.dxaxii2         is x           ' Diagnosis Axis 2 Level 2
+   c.dxaxii3         is x           ' Diagnosis Axis 2 Level 3
+   c.dxaxii4         is x           ' Diagnosis Axis 2 Level 4
+   c.dxaxiii1        is x           ' Diagnosis Axis 3
+   c.dxax4sup        is x           ' Diagnosis Axis 4 (A)
+   c.dxax4soc        is x           ' Diagnosis Axis 4 (B)
+   c.dxax4edu        is x           ' Diagnosis Axis 4 (C)
+   c.dxax4occ        is x           ' Diagnosis Axis 4 (D)
+   c.dxax4hou        is x           ' Diagnosis Axis 4 (E)
+   c.dxax4eco        is x           ' Diagnosis Axis 4 (F)
+   c.dxax4hca        is x           ' Diagnosis Axis 4 (G)
+   c.dxax4leg        is x           ' Diagnosis Axis 4 (H)
+   c.dxax4ops        is x           ' Diagnosis Axis 4 (I)
+   c.dxax4non        is x           ' Diagnosis Axis 4 (J)
+   c.dxaxvc          is x           ' Diagnosis Axis 5 Current
+   c.cabl            is x           ' Diagnosis ABL Current
+   c.pabl            is x           ' Diagnosis ABL Potential
+   c.iqscore         is x           ' Diagnosis IQ Score
+   c.iqdate          is d           ' Diagnosis IQ Test Date
+   c.iqtstype        is x           ' Diagnosis IQ Test Type
+   c.socquot         is x           ' Diagnosis SQ Score
+   c.socqdate        is d           ' Diagnosis SQ Test Date
+   c.socqtest        is x           ' Diagnosis SQ Test Type
+   ' Community Based Assignment Record
+   c.cb.rec          is header      ' CBA Record Header
+   c.cb.asn          is x           ' CBA Service Type
+   c.cb.eff          is d           ' CBA Begin Date
+   c.cb.laps         is d           ' CBA End Date
+   c.cb.efsub        is d           ' CBA CARE Begin Date Submit Date
+   c.cb.lasub        is d           ' CBA CARE End Date Submit Date
+   c.cb.svclc        is b           ' CBA Service Location
+   c.cb.acod2        is x           ' CBA Delete Indicator
+   c.cb.ddate        is d           ' CBA Delete Submit Date
+   c.cb.rstaff       is x           ' CBA Case Manager
+   ' New Generation Medication Record
+   c.ngm.rec         is header      ' NGM Record Header
+   c.ngm.drug        is x           ' NGM Drug Code
+   c.ngm.stdate      is d           ' NGM Start Date
+   c.ngm.enddate     is d           ' NGM End Date
+   c.ngm.endreas     is x           ' NGM End Reason Code
+   c.ngm.endcomm     is x           ' NGM End Reason Comment
+   c.ngm.fs          is x           ' NGM Funding Source
+   c.ngm.carebdt     is d           ' NGM CARE Submission Begin Date
+   c.ngm.careedt     is d           ' NGM CARE Submission End Date
+   ' client dst's
+   c.fn              is x
+   c.ln              is x
+   c.mn              is x
+   ' Bed days record
+   c.bd.rec          is r
+   c.bd.fsdate       is d
+   c.bd.fscode       is x
+   c.bd.caredt       is d
+   fscount           is b
+   fs_to[]           is x
+   fs_msg[]          is x
+   p_fsemailto       is x
+   p_fsemail         is x
+
+   rc                is b
+   T                 is x
+   p_ftp             is x           'ftp enabled?
+   p_ftpsite1        is x
+   p_login1          is x
+   p_pass1           is x
+   p_ftpsite2        is x
+   p_login2          is x
+   p_pass2           is x
+   p_localdir        is x
+   p_remotedir2      is x
+
+   p_ftp          = "Y"
+   p_localdir     = "/c0/carebatch"
+   p_remotedir2   = "CMHC/CARE"
+   p_fsemail      = "Y"
+
+'''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+gosub _init
+gosub _main
+return
+
+'--------------------------------------
+'  Main Program
+'--------------------------------------
+_main:
+   client_id = "000102"
+
+   %debugstart
+   $clear(client_id)
+   %debugend
+
+   (void) $dbstart(02, client_id)              ' Get the first real ID in DB
+   retcode1 = $dbread(02, client_id, c.reg.sub, c.ln, c.fn, c.mn)
+
+   do while (retcode1 < 3 or retcode = 4)
+      ClCount++
+      ClDiagnosed = "N"
+      ClNGMClose = "N"
+      if $operioallow = "Y" then
+         $disp(client_id, 6, 16, 10, "H")    ' Show the client id being processed
+         $disp($fmt(RegCount, "       Registrations: 999999"), 8, 5)
+         $disp($fmt(RegUpdtCount, "Registration Updates: 999999"), 9, 5)
+         $disp($fmt(DiagCount, "           Diagnosis: 999999"), 10, 5)
+         $disp($fmt(CBACount, "                CBAs: 999999"), 11, 5)
+         $disp($fmt(NGMCount, "                NGMs: 999999"), 12, 5)
+         $disp($fmt(FSCount, "           Follow-Up: 999999"), 13, 5)
+         $disp($fmt(TransCount, " Transaction Records: 999999"), 15, 5)
+         $disp($fmt(ClCount, "        Client Count: 999999"), 16, 5)
+      endif
+
+      if c.reg.sub dp then
+         ClRegistered = "Y"
+         gosub REGISTRATIONUPDT
+         gosub DIAGNOSIS
+         if $today >= $date(CN_FSStartDate) then
+            gosub s_FIRSTSERV
+         endif
+      else
+         ClRegistered = "N"
+         gosub REGISTRATION
+      endif
+      if ClDiagnosed = "Y" then
+         cba_action = "D"
+         gosub CBASECTION
+         cba_action = "A"
+         gosub CBASECTION
+         ngm_action = "C"
+         gosub NGMSECTION
+         ngm_action = "A"
+         gosub NGMSECTION
+      endif
+
+      'only process a few while debugging
+      %debugstart
+      if ClCount > DEBUG_CLCOUNT then
+         gosub CLEANUP
+         goback
+      endif
+      %debugend
+
+      retcode1 = $dbreadnext(02, client_id, c.reg.sub, c.ln, c.fn, c.mn)
+   enddo
+
+   gosub CLEANUP
+
+goback
+
+
+REGISTRATION:
+'--------------------------------------
+'  Registration Section
+'--------------------------------------
+   $dblock()
+   retcode = $dbread(02, client_id, c.reg.sub, c.reg.hdr, c.reg.subdt,
+            c.reg.force, c.reg.exclude,   c.reg.uid, c.reg.dt, c.reg.pp, c.reg.ln,
+            c.reg.sufx, c.reg.fn, c.reg.mn, c.reg.sex, c.reg.eth, c.reg.bd,
+            c.reg.ssn, c.reg.street, c.reg.city, c.reg.cityd, c.reg.state,
+            c.reg.zip, c.reg.county,
+            c.reg.cor.fn, c.reg.cor.ln, c.reg.cor.str,
+            c.reg.cor.city, c.reg.cor.state, c.reg.cor.zip, c.reg.cor.cityd,
+            c.reg.cor.phone, c.reg.cor.rel,
+            c.reg.pp.inc,c.reg.pp.fam)
+
+   if c.reg.hdr dp then
+      c.reg.sub       = $today
+      c.reg.sub[EFFD] = $today
+      retcode = $dbupdate(02, client_id, c.reg.sub)
+      if retcode != 0 then
+         LockReg[++j] = client_id
+         goback
+      endif
+      RegCount++
+      TransCount++
+
+      OutRec = CN_COMP                                   ' 01 Component Code
+         + "1"                                           ' 02 Record Type
+         + "05"                                          ' 03 Transaction Code
+         + "A"                                           ' 04 Transaction Format Version
+         + $formatf(TransCount, "999999")                ' 05 Logical Transaction Number
+         + "01"                                          ' 06 Physical Record Number
+         + "T1"                                          ' 07 Batch Number
+         + $formatf($today, "YYYYMMDD")                  ' 08 Transaction Enter Date
+         + "1721 "                                       ' 09 User ID
+         + $formatf(client_id, "~~~~~~~~~~")             ' 10 Local Case Number
+         + $formatf(c.reg.ln, "~~~~~~~~~~~~~~~~")        ' 11 Last Name
+         + "   "                                         ' 12 Suffix
+         + $formatf(c.reg.fn, "~~~~~~~~~~~")             ' 13 First Name
+         + $formatf(c.reg.mn, "~~~~~~~~~~")              ' 14 Middle Name
+      OutRec = StrPad(OutRec,80," ")
+      (void) $writefile(BatchFile, OutRec)
+
+      OutRec = CN_COMP                                   ' 01 Component Code
+         + "1"                                           ' 02 Record Type
+         + "05"                                          ' 03 Transaction Code
+         + "A"                                           ' 04 Transaction Format Version
+         + $formatf(TransCount, "999999")                ' 05 Logical Transaction Number
+         + "02"                                          ' 06 Physical Record Number
+         + $formatf(c.reg.sex, "~")                      ' 07 Sex
+         + $formatf($dct(0023,c.reg.eth,"2"), "~")       ' 08 New Race
+         + $formatf(c.reg.bd, "YYYYMMDD")                ' 09 Birth Date
+      if c.reg.ssn = "N" or c.reg.ssn = "U" then         ' 10 Social Security Number
+         OutRec += $formatf(c.reg.ssn, "~~~~~~~~~")
+      else
+         if c.reg.ssn dp then
+            c_reg_ssn = $num($tran(c.reg.ssn,"+-/*", "XXXX"))
+            OutRec += $formatf(c_reg_ssn, "999999999")
+         else
+            OutRec += "U        "
+         endif
+      endif
+      OutRec += $formatf(c.reg.pp, "~")                 ' 11 Presenting Problem
+      OutRec += $formatf(c.reg.dt, "YYYYMMDD")          ' 12 Registration Date
+      OutRec += "0001"                                  ' 13 Registration Time
+      OutRec += $formatf(c.reg.street, "~~~~~~~~~~~~~~~~~~~~~~~~~")   ' 14 Street
+      OutRec = StrPad(OutRec,80," ")
+      (void) $writefile(BatchFile, OutRec)
+
+      OutRec = CN_COMP                                   ' 01 Component Code
+         + "1"                                           ' 02 Record Type
+         + "05"                                          ' 03 Transaction Code
+         + "A"                                           ' 04 Transaction Format Version
+         + $formatf(TransCount, "999999")                ' 05 Logical Transaction Number
+         + "03"                                          ' 06 Physical Record Number
+      if c.reg.city != "OTHER" then
+         c_reg_city = $dct(0047, c.reg.city, "1")
+         OutRec += $formatf(c_reg_city, "~~~~~~~~~~~~~~~~~~~~") ' 07 City
+      else
+         OutRec += $formatf(c.reg.cityd, "~~~~~~~~~~~~~~~~~~~~")   ' 07 City
+      endif
+      OutRec += $formatf(c.reg.state, "~~")              ' 08 State
+      OutRec += $formatf(c.reg.zip, "~~~~~")             ' 09 Zip
+      OutRec += "    "                                   ' 10 Zip Code Suffix
+      OutRec += $formatf(c.reg.county, "~~~")            ' 11 County
+      OutRec += "   "                                    ' 12 Ethnicity
+      OutRec += " "                                      ' 13 Marital Status
+
+      if c.reg.pp.inc dp then
+         T = $fmt(c.reg.pp.inc,"ZZZZZZZZZ9")             ' 14 Adjusted Gross income
+         OutRec += $formatf(T,"~~~~~~~~~~")
+      else
+         OutRec += $mchar(" ",10)
+      endif
+
+      if c.reg.pp.fam dp then
+         OutRec += $formatf(c.reg.pp.fam,"99")           ' 15 Family size
+      else
+         OutRec += $mchar(" ",2)
+      endif
+
+      OutRec = StrPad(OutRec,80," ")
+      (void) $writefile(BatchFile, OutRec)
+
+      ' Primary Correspondent
+      OutRec = CN_COMP                                   ' 01 Component Code
+         + "1"                                           ' 02 Record Type
+         + "05"                                          ' 03 Transaction Code
+         + "A"                                           ' 04 Transaction Format Version
+         + $formatf(TransCount, "999999")                ' 05 Logical Transaction Number
+         + "04"                                          ' 06 Physical Record Number
+      string = c.reg.cor.fn + " " + c.reg.cor.ln
+      OutRec += $formatf(string, "~~~~~~~~~~~~~~~~~~~~~~~~~")' 11 Last Name
+      OutRec += $formatf(c.reg.cor.str, "~~~~~~~~~~~~~~~~~~~~~~~~~")  ' 14 Street
+      OutRec = StrPad(OutRec,80," ")
+      (void) $writefile(BatchFile, OutRec)
+
+      OutRec = CN_COMP                                   ' 01 Component Code
+         + "1"                                           ' 02 Record Type
+         + "05"                                          ' 03 Transaction Code
+         + "A"                                           ' 04 Transaction Format Version
+         + $formatf(TransCount, "999999")                ' 05 Logical Transaction Number
+         + "05"                                          ' 06 Physical Record Number
+         + $formatf(c.reg.cor.cityd, "~~~~~~~~~~~~~~~~~~~~")
+         + $formatf(c.reg.cor.state, "~~")               ' 08 State
+         + $formatf(c.reg.cor.zip, "~~~~~")              ' 09 Zip
+         + "    "                                        ' 10 Zip Code Suffix
+      '#thumb - check out this parsem() stuff more.  Looks like it could be better
+      $parsem(c.reg.cor.phone, 1, " ", areac, extention, pnum)
+      string = areac + extention + pnum
+      $parsem(string, 1, "-", areac, extention, pnum)
+      string = areac + extention + pnum
+      OutRec += $formatf(string,"~~~~~~~~~~")
+      OutRec += $formatf(c.reg.cor.rel, "~~")
+      OutRec = StrPad(OutRec,80," ")
+      (void) $writefile(BatchFile, OutRec)
+
+      OutRec = CN_COMP                                   ' 01 Component Code
+         + "1"                                           ' 02 Record Type
+         + "05"                                          ' 03 Transaction Code
+         + "A"                                           ' 04 Transaction Format Version
+         + $formatf(TransCount, "999999")                ' 05 Logical Transaction Number
+         + "06"                                          ' 06 Physical Record Number
+      OutRec = StrPad(OutRec,80," ")
+      (void) $writefile(BatchFile, OutRec)
+
+      OutRec = CN_COMP                                   ' 01 Component Code
+         + "1"                                           ' 02 Record Type
+         + "05"                                          ' 03 Transaction Code
+         + "A"                                           ' 04 Transaction Format Version
+         + $formatf(TransCount, "999999")                ' 05 Logical Transaction Number
+         + "07"                                          ' 06 Physical Record Number
+      OutRec = StrPad(OutRec,80," ")
+      (void) $writefile(BatchFile, OutRec)
+
+      OutRec = CN_COMP                                   ' 01 Component Code
+         + "1"                                           ' 02 Record Type
+         + "05"                                          ' 03 Transaction Code
+         + "A"                                           ' 04 Transaction Format Version
+         + $formatf(TransCount, "999999")                ' 05 Logical Transaction Number
+         + "08"                                          ' 06 Physical Record Number
+      OutRec = StrPad(OutRec,80," ")
+      (void) $writefile(BatchFile, OutRec)
+
+   else
+      $dbunlock()
+   endif
+goback
+
+
+'--------------------------------------
+'  Registration Update Section
+'--------------------------------------
+REGISTRATIONUPDT:
+  $dblock()
+  retcode = $dbread(02, client_id, c.reg.sub, c.reg.hdr, c.reg.subdt,
+           c.reg.force, c.reg.exclude,   c.reg.uid, c.reg.dt, c.reg.pp, c.reg.ln,
+           c.reg.sufx, c.reg.fn, c.reg.mn, c.reg.sex, c.reg.eth, c.reg.bd,
+           c.reg.ssn, c.reg.street, c.reg.city, c.reg.cityd, c.reg.state,
+           c.reg.zip, c.reg.county, c.reg.c.ln, c.reg.c.fn, c.reg.chdt,
+           c.reg.cor.fn, c.reg.cor.ln, c.reg.cor.str,
+           c.reg.cor.city, c.reg.cor.state, c.reg.cor.zip, c.reg.cor.cityd,
+           c.reg.cor.phone, c.reg.cor.rel,
+           c.reg.pp.inc,c.reg.pp.fam)
+
+   if c.reg.subdt !dp and c.reg.exclude != "Y" then
+      c.reg.subdt = $today
+      retcode = $dbupdate(02, client_id, c.reg.hdr, c.reg.subdt)
+      if retcode != 0 then
+         LockReg[++j] = client_id
+         goback
+      endif
+      RegUpdtCount++
+      Transcount++
+
+      OutRec = CN_COMP                                         ' 01 Component Code
+         + "1"                                                 ' 02 Record Type
+         + "07"                                                ' 03 Transaction Code
+         + "A"                                                 ' 04 Transaction Format Version
+         + $formatf(TransCount, "999999")                      ' 05 Logical Transaction Number
+         + "01"                                                ' 06 Physical Record Number
+         + "T1"                                                ' 07 Batch Number
+         + $formatf($today, "YYYYMMDD")                        ' 08 Transaction Enter Date
+         + "1721 "                                             ' 09 User ID
+         + $formatf(client_id, "~~~~~~~~~~")                   ' 10 Local Case Number
+         + $formatf(c.reg.c.ln, "~~~~~~~~~~~~~~~~")            ' 11 Last Name
+         + $formatf(c.reg.c.fn, "~~~~~~~~~~~")                 ' 12 First Name
+         + $formatf(c.reg.dt, "YYYYMMDD")                      ' 13 Effective Date of Change
+      OutRec = StrPad(OutRec,80," ")
+      (void) $writefile(BatchFile, OutRec)
+
+      OutRec = CN_COMP                                         ' 01 Component Code
+         + "1"                                                 ' 02 Record Type
+         + "07"                                                ' 03 Transaction Code
+         + "A"                                                 ' 04 Transaction Format Version
+         + $formatf(TransCount, "999999")                      ' 05 Logical Transaction Number
+         + "02"                                                ' 06 Physical Record Number
+         + $formatf(c.reg.ln, "~~~~~~~~~~~~~~~~")              ' 07 Last Name
+         + "~  "                                               ' 08 Suffix
+         + $formatf(c.reg.fn, "~~~~~~~~~~~")                   ' 09 First Name
+      if c.reg.mn dp then
+         OutRec += $formatf(c.reg.mn, "~~~~~~~~~~")            ' 10 Middle Name
+      else
+         OutRec += "~         "                                ' 10 Middle Name
+      endif
+      if c.reg.sex dp then
+         OutRec += $formatf(c.reg.sex, "~")                    ' 11 Sex
+      else
+         OutRec += "~"                                         ' 11 Sex
+      endif
+      if c.reg.eth dp then
+         OutRec += $formatf($dct(0023,c.reg.eth,"2"), "~")     ' 12 New Race
+      else
+         OutRec += "~"                                         ' 12 New Race
+      endif
+      if c.reg.bd dp then
+         OutRec += $formatf(c.reg.bd, "YYYYMMDD")              ' 13 Birth Date
+      else
+         OutRec += "~       "                                  ' 13 Birth Date
+      endif
+      if c.reg.ssn = "N" or c.reg.ssn = "U" then
+         OutRec += $formatf(c.reg.ssn, "~~~~~~~~~")            ' 14 Social Security Number
+      else
+         if c.reg.ssn dp then
+            c_reg_ssn = $num($tran(c.reg.ssn,"+-/*", "XXXX"))
+            OutRec += $formatf(c_reg_ssn, "999999999")         ' 14 Social Security Number
+         else
+            OutRec += "U        "                              ' 14 Social Security Number
+         endif
+      endif
+      if c.reg.pp dp then
+         OutRec += $formatf(c.reg.pp, "~")                     ' 15 Presenting Problem
+      else
+         OutRec += "~"                                         ' 15 Presenting Problem
+      endif
+      OutRec = StrPad(OutRec,80," ")
+      (void) $writefile(BatchFile, OutRec)
+
+      OutRec = CN_COMP                                         ' 01 Component Code
+         + "1"                                                 ' 02 Record Type
+         + "07"                                                ' 03 Transaction Code
+         + "A"                                                 ' 04 Transaction Format Version
+         + $formatf(TransCount, "999999")                      ' 05 Logical Transaction Number
+         + "03"                                                ' 06 Physical Record Number
+         + "~       "                                          ' 07 Registration Date
+         + "   ~"                                              ' 08 Registration Time
+      if c.reg.street dp then
+         OutRec += $formatf(c.reg.street, "~~~~~~~~~~~~~~~~~~~~~~~~~")   ' 09 Street
+      else
+         OutRec += "~                        "                 ' 09 Street
+      endif
+      if c.reg.city != "OTHER" then
+         if c.reg.city dp then
+            c_reg_city = $dct(0047, c.reg.city, "1")
+            OutRec += $formatf(c_reg_city, "~~~~~~~~~~~~~~~~~~~~") ' 10 City
+         else
+            OutRec += "~                   "                       ' 10 City
+         endif
+      else
+         OutRec += $formatf(c.reg.cityd, "~~~~~~~~~~~~~~~~~~~~")   ' 10 City
+      endif
+      if c.reg.state dp then
+         OutRec += $formatf(c.reg.state, "~~")                 ' 11 State
+      else
+         OutRec += "~ "                                        ' 11 State
+      endif
+      if c.reg.zip dp then
+         OutRec += $formatf(c.reg.zip, "~~~~~")                ' 12 Zip
+      else
+         OutRec += "~    "                                     ' 12 Zip
+      endif
+      OutRec = StrPad(OutRec,80," ")
+      (void) $writefile(BatchFile, OutRec)
+
+      OutRec = CN_COMP                                         ' 01 Component Code
+         + "1"                                                 ' 02 Record Type
+         + "07"                                                ' 03 Transaction Code
+         + "A"                                                 ' 04 Transaction Format Version
+         + $formatf(TransCount, "999999")                      ' 05 Logical Transaction Number
+         + "04"                                                ' 06 Physical Record Number
+         + "~   "                                              ' 07 Zip Code Suffix
+         + "~"                                                 ' 08 New Federal Ethnicity
+         + "  "                                                ' 09 filler
+         + "~"                                                 ' 10 Marital Status
+
+      if c.reg.pp.inc dp then
+         T = $fmt(c.reg.pp.inc,"ZZZZZZZZZ9")                   ' 11 Adjusted Gross income
+         OutRec += $formatf(T,"~~~~~~~~~~")
+      else
+         OutRec += $mchar(" ",10)
+      endif
+
+      if c.reg.pp.fam dp then
+         OutRec += $formatf(c.reg.pp.fam,"99")                 ' 12 Family size
+      else
+         OutRec += $mchar(" ",2)
+      endif
+
+      T = c.reg.cor.fn + " " + c.reg.cor.ln                    ' 13 Primary Corrspondent name
+      OutRec += $formatf(T, "~~~~~~~~~~~~~~~~~~~~~~~~~")
+      OutRec = StrPad(OutRec,80," ")
+      (void) $writefile(BatchFile, OutRec)
+
+      OutRec = CN_COMP                                         ' 01 Component Code
+         + "1"                                                 ' 02 Record Type
+         + "07"                                                ' 03 Transaction Code
+         + "A"                                                 ' 04 Transaction Format Version
+         + $formatf(TransCount, "999999")                      ' 05 Logical Transaction Number
+         + "05"                                                ' 06 Physical Record Number
+         + $formatf(c.reg.cor.str, "~~~~~~~~~~~~~~~~~~~~~~~~~") ' 14 Street
+         + $formatf(c.reg.cor.cityd, "~~~~~~~~~~~~~~~~~~~~")
+         + $formatf(c.reg.cor.state, "~~")                      ' 08 State
+         + $formatf(c.reg.cor.zip, "~~~~~")                     ' 09 Zip
+         + "~   "                                               ' 10 Zip Code Suffix
+      OutRec = StrPad(OutRec,80," ")
+      (void) $writefile(BatchFile, OutRec)
+
+      OutRec = CN_COMP                                         ' 01 Component Code
+         + "1"                                                 ' 02 Record Type
+         + "07"                                                ' 03 Transaction Code
+         + "A"                                                 ' 04 Transaction Format Version
+         + $formatf(TransCount, "999999")                      ' 05 Logical Transaction Number
+         + "06"                                                ' 06 Physical Record Number
+
+      $parsem(c.reg.cor.phone, 1, " ", areac, extention, pnum)
+      string = areac + extention + pnum
+      $parsem(string, 1, "-", areac, extention, pnum)
+      string = areac + extention + pnum
+
+      OutRec += $formatf(string,"~~~~~~~~~~")
+         + $formatf(c.reg.cor.rel, "~~")
+         + "~                        ~                        "   '#thumb - wide padding?
+      OutRec = StrPad(OutRec,80," ")
+      (void) $writefile(BatchFile, OutRec)
+
+      OutRec = CN_COMP                                         ' 01 Component Code
+         + "1"                                                 ' 02 Record Type
+         + "07"                                                ' 03 Transaction Code
+         + "A"                                                 ' 04 Transaction Format Version
+         + $formatf(TransCount, "999999")                      ' 05 Logical Transaction Number
+         + "07"                                                ' 06 Physical Record Number
+         + "~                   ~ ~    ~   ~         ~ ~~ "
+      OutRec = StrPad(OutRec,80," ")
+      (void) $writefile(BatchFile, OutRec)
+
+   else
+      $dbunlock()
+   endif
+goback
+
+
+DIAGNOSIS:
+'--------------------------------------
+'  Diagnosis Section
+'--------------------------------------
+   $dblock()
+   retcode = $dbread(02, client_id, c.dxrec, c.dx.caredt, c.dxdate, c.dxaxi1mh,
+         c.dxaxi2mh, c.dxaxi3mh, c.dxaxi4mh, c.dxaxi5mh, c.dxaxi6mh, c.dxreason,
+         c.dxaxis, c.dxaxii1, c.dxaxii2, c.dxaxii3, c.dxaxii4, c.dxaxiii1,
+         c.dxax4sup, c.dxax4soc, c.dxax4edu, c.dxax4occ, c.dxax4hou, c.dxax4eco,
+         c.dxax4hca, c.dxax4leg, c.dxax4ops, c.dxax4non, c.dxaxvc, c.cabl,
+         c.pabl, c.iqscore, c.iqdate, c.iqtstype, c.socquot, c.socqdate,
+         c.socqtest)
+
+   if c.dx.caredt !dp and c.dxdate dp then
+      if c.dxdate <= oneyear then
+         goback
+      endif
+      c.dx.caredt = $today
+      retcode = $dbupdate(02, client_id, c.dxrec, c.dx.caredt)
+      if retcode != 0 then
+         LockReg[++j] = client_id
+         goback
+      endif
+      DiagCount++
+      Transcount++
+
+      OutRec = CN_COMP                                   ' 01 Component Code
+         + "1"                                           ' 02 Record Type
+         + "15"                                          ' 03 Transaction Code
+         + "B"                                           ' 04 Transaction Format Version
+         + $formatf(TransCount, "999999")                ' 05 Logical Transaction Number
+         + "01"                                          ' 06 Physical Record Number
+         + "T1"                                          ' 07 Batch Number
+         + $formatf($today, "YYYYMMDD")                  ' 08 Transaction Enter Date
+         + "1721 "                                       ' 09 User ID
+         + $formatf(client_id, "~~~~~~~~~~")             ' 10 Local Case Number
+         + "          "                                  ' 11 CARE ID
+         + $formatf(c.reg.ln, "~~~~~~~~~~~~~~~~")        ' 12 Last Name
+         + "   "                                         ' 13 Suffix
+         + $formatf(c.reg.fn, "~~~~~~~~~~~")             ' 14 First Name
+      OutRec = StrPad(OutRec,80," ")
+      (void) $writefile(BatchFile, OutRec)
+
+      OutRec = CN_COMP                                   ' 01 Component Code
+         + "1"                                           ' 02 Record Type
+         + "15"                                          ' 03 Transaction Code
+         + "B"                                           ' 04 Transaction Format Version
+         + $formatf(TransCount, "999999")                ' 05 Logical Transaction Number
+         + "02"                                          ' 06 Physical Record Number
+         + $formatf(c.reg.mn, "~~~~~~~~~~")              ' 07 Middle Name
+         + $formatf(c.dxdate, "YYYYMMDD")                ' 08 Date of Staff Decision (Diagnosis d)
+         + "    "                                        ' 08 Time of Staff Decision (Diagnosis Time)
+         + $formatf(c.dxreason, "~")                     ' 09 Reason for Action
+         + $formatf(c.dxaxis, "~")                       ' 10 Principal Diag Axis
+      care_code = get_axis1(c.dxaxi1mh)
+      OutRec += $formatf(care_code, "~~~~~")             ' 11 Axis 1 Level 1
+      care_code = get_axis1(c.dxaxi2mh)
+      OutRec += $formatf(care_code, "~~~~~")             ' 12 Axis 1 Level 2
+      care_code = get_axis1(c.dxaxi3mh)
+      OutRec += $formatf(care_code, "~~~~~")             ' 13 Axis 1 Level 3
+      care_code = get_axis1(c.dxaxi4mh)
+      OutRec += $formatf(care_code, "~~~~~")             ' 14 Axis 1 Level 4
+      care_code = get_axis1(c.dxaxi5mh)
+      OutRec += $formatf(care_code, "~~~~~")             ' 15 Axis 1 Level 5
+      care_code = get_axis1(c.dxaxi6mh)
+      OutRec += $formatf(care_code, "~~~~~")             ' 16 Axis 1 Level 6
+      care_code = get_axis2(c.dxaxii1)
+      OutRec += $formatf(care_code, "~~~~~")             ' 17 Axis 2 Level 1
+      care_code = get_axis2(c.dxaxii2)
+      OutRec += $formatf(care_code, "~~~~~")             ' 18 Axis 2 Level 2
+      OutRec = StrPad(OutRec,80," ")
+      (void) $writefile(BatchFile, OutRec)
+
+      OutRec = CN_COMP                                   ' 01 Component Code
+         + "1"                                           ' 02 Record Type
+         + "15"                                          ' 03 Transaction Code
+         + "B"                                           ' 04 Transaction Format Version
+         + $formatf(TransCount, "999999")                ' 05 Logical Transaction Number
+         + "03"                                          ' 06 Physical Record Number
+      care_code = get_axis2(c.dxaxii3)
+      OutRec += $formatf(care_code, "~~~~~")             ' 07 Axis 2 Level 3
+         + "     "                                       ' 08 Axis 2 Level 4
+      care_code = $replace(".","",c.dxaxiii1)
+      OutRec += $formatf(care_code, "~~~~~")             ' 09 Axis 3 Level 1
+         + "     "                                       ' 10 Axis 3 Level 2
+         + "     "                                       ' 11 Axis 3 Level 3
+         + "     "                                       ' 12 Axis 3 Level 4
+         + "     "                                       ' 13 Axis 3 Level 5
+         + "     "                                       ' 14 Axis 3 Level 6
+         + $formatf(c.dxdate, "YYYYMMDD")                ' 15 Date of Axis III (Diagnosis d)
+      if c.dxax4sup = "Y" then
+         OutRec += "A"                                   ' 16 Axis IV - 1 (A)
+      else
+         OutRec += " "                                   ' 16 Axis IV - 1 (A) Null
+      endif
+      OutRec += " "                                      ' Filler
+         + $formatf(c.cabl, "~")                         ' 17 Current ABL
+         + $formatf(c.pabl, "~")                         ' 18 Potential ABL
+         + "   "                                         ' 19 Primary AAMD
+         + "   "                                         ' 20 Secondary AAMD
+         + "   "                                         ' 21 Tertiary AAMD
+         + "  "                                          ' 22 Genetic Component
+         + "  "                                          ' 23 Cranial Anomaly
+      OutRec = StrPad(OutRec,80," ")
+      (void) $writefile(BatchFile, OutRec)
+
+      OutRec = CN_COMP                                   ' 01 Component Code
+         + "1"                                           ' 02 Record Type
+         + "15"                                          ' 03 Transaction Code
+         + "B"                                           ' 04 Transaction Format Version
+         + $formatf(TransCount, "999999")                ' 05 Logical Transaction Number
+         + "04"                                          ' 06 Physical Record Number
+         + "  "                                          ' 07 Sensory Impairment
+         + "  "                                          ' 08 Perception
+         + "  "                                          ' 09 Convulsive Disorder
+         + "  "                                          ' 10 PSY Impairment
+         + "  "                                          ' 11 Motor Dysfunction
+         + " "                                           ' 12 Motor Location
+         + " "                                           ' 13 Motor Severity
+         + "        "                                    ' 14 AAMD Date
+         + $formatf(c.iqscore, "~~~")                    ' 15 IQ Score
+         + $formatf(c.iqtstype, "~~")                    ' 16 IQ Test
+         + $formatf(c.iqdate, "YYYYMMDD")                ' 17 IQ Test Date
+         + $formatf(c.socquot, "~~~")                    ' 18 SQ Score
+         + $formatf(c.socqtest, "~~")                    ' 19 SQ Test
+         + $formatf(c.socqdate, "YYYYMMDD")              ' 20 SQ Test Date
+         + "77"                                          ' 21 AAMD Version
+         + "4"                                           ' 22 DSM Version
+         + "9"                                           ' 23 ICD Version
+         + $formatf(c.dxaxvc, "~~")                      ' 24 Axis V Current
+         + "  "                                          ' 25 Axis V Prev
+      if c.dxax4soc = "Y" then
+         OutRec += "B"                                   ' 26 Axis IV - 2 (B)
+      else
+         OutRec += " "                                   ' 26 Axis IV - 2 (B) Null
+      endif
+      if c.dxax4edu = "Y" then
+         OutRec += "C"                                   ' 27 Axis IV - 3 (C)
+      else
+         OutRec += " "                                   ' 27 Axis IV - 3 (C) Null
+      endif
+      if c.dxax4occ = "Y" then
+         OutRec += "D"                                   ' 28 Axis IV - 4 (D)
+      else
+         OutRec += " "                                   ' 28 Axis IV - 4 (D) Null
+      endif
+      if c.dxax4hou = "Y" then
+         OutRec += "E"                                   ' 29 Axis IV - 5 (E)
+      else
+         OutRec += " "                                   ' 29 Axis IV - 5 (E) Null
+      endif
+      if c.dxax4eco = "Y" then
+         OutRec += "F"                                   ' 30 Axis IV - 6 (F)
+      else
+         OutRec += " "                                   ' 30 Axis IV - 6 (F) Null
+      endif
+      if c.dxax4hca = "Y" then
+         OutRec += "G"                                   ' 31 Axis IV - 7 (G)
+      else
+         OutRec += " "                                   ' 31 Axis IV - 7 (G) Null
+      endif
+      if c.dxax4leg = "Y" then
+         OutRec += "H"                                   ' 32 Axis IV - 8 (H)
+      else
+         OutRec += " "                                   ' 32 Axis IV - 8 (H) Null
+      endif
+      if c.dxax4ops = "Y" then
+         OutRec += "I"                                   ' 33 Axis IV - 9 (I)
+      else
+         OutRec += " "                                   ' 33 Axis IV - 9 (I) Null
+      endif
+      if c.dxax4non = "Y" then
+         OutRec += "J"                                   ' 34 Axis IV - 10 (J)
+      else
+         OutRec += " "                                   ' 34 Axis IV - 10 (J) Null
+      endif
+      OutRec = StrPad(OutRec,80," ")
+      (void) $writefile(BatchFile, OutRec)
+
+   else
+      ClDiagnosed = "Y"
+   endif
+goback
+
+
+'--------------------------------------
+'  Community Based Assignment Section
+'--------------------------------------
+'#thumb - this looping logic needs to be cleaned up along with the goto's
+CBASECTION:
+   $dblock()
+   retcode = $dbread(02, client_id, c.cb.rec, c.cb.asn, c.cb.eff, c.cb.laps,
+         c.cb.efsub, c.cb.lasub, c.cb.svclc, c.cb.acod2, c.cb.ddate, c.cb.rstaff)
+
+   do while retcode < 2
+      select cba_action
+         case "D"
+            if c.cb.acod2 dp and c.cb.ddate !dp then
+               c.cb.ddate = $today
+               retcode = $dbupdate(02, client_id, c.cb.rec, c.cb.ddate)
+               if retcode != 0 then
+                  LockReg[++j] = client_id
+                  goback
+               endif
+               if c.cb.efsub !dp then
+                  GOTO CBASECTION
+               endif
+            else
+               GOTO CBAPASS
+            endif
+         case "A" or "E"
+            if c.cb.laps !dp and c.cb.efsub dp then
+               GOTO CBAPASS
+            elseif c.cb.laps !dp then
+               cba_action = "A"
+               c.cb.efsub = $today
+               retcode = $dbupdate(02, client_id, c.cb.rec, c.cb.efsub)
+               if retcode != 0 then
+                  LockReg[++j] = client_id
+                  goback
+               endif
+            elseif c.cb.efsub dp and c.cb.lasub dp then
+               GOTO CBAPASS
+            elseif c.cb.efsub dp and c.cb.lasub !dp then
+               cba_action = "E"
+               c.cb.lasub = $today
+               retcode = $dbupdate(02, client_id, c.cb.rec, c.cb.lasub)
+               if retcode != 0 then
+                  LockReg[++j] = client_id
+                  goback
+               endif
+            else
+               cba_action = "A"
+               c.cb.efsub = $today
+               c.cb.lasub = $today
+               retcode = $dbupdate(02, client_id, c.cb.rec, c.cb.efsub, c.cb.lasub)
+               if retcode != 0 then
+                  LockReg[++j] = client_id
+                  goback
+               endif
+            endif
+      endselect
+
+      CBACount++
+      Transcount++
+
+      OutRec = CN_COMP                                   ' 01 Component Code
+         + "1"                                           ' 02 Record Type
+         + "21"                                          ' 03 Transaction Code
+         + "A"                                           ' 04 Transaction Format Version
+         + $formatf(TransCount, "999999")                ' 05 Logical Transaction Number
+         + "01"                                          ' 06 Physical Record Number
+         + "T1"                                          ' 07 Batch Number
+         + $formatf($today, "YYYYMMDD")                  ' 08 Transaction Enter Date
+         + "BATCH"                                       ' 09 User ID
+         + $formatf(client_id, "~~~~~~~~~~")             ' 10 Local Case Number
+         + "          "                                  ' 11 CARE ID
+         + $formatf(c.reg.ln, "~~~~~~~~~~~~~~~~")        ' 12 Last Name
+         + "   "                                         ' 13 Suffix
+         + $formatf(c.reg.fn, "~~~~~~~~~~~")             ' 14 First Name
+      OutRec = StrPad(OutRec,80," ")
+      (void) $writefile(BatchFile, OutRec)
+
+      OutRec = CN_COMP                                   ' 01 Component Code
+         + "1"                                           ' 02 Record Type
+         + "21"                                          ' 03 Transaction Code
+         + "A"                                           ' 04 Transaction Format Version
+         + $formatf(TransCount, "999999")                ' 05 Logical Transaction Number
+         + "02"                                          ' 06 Physical Record Number
+         + $formatf(c.reg.mn, "~~~~~~~~~~")              ' 07 Middle Name
+         + $formatf(c.cb.asn, "~~~~")                    ' 08 Service Type
+         + $formatf(cba_action, "~")                     ' 09 Action Code
+         + $formatf(c.cb.eff, "YYYYMMDD")                ' 10 Effective Date
+         + $formatf(c.cb.laps, "YYYYMMDD")               ' 11 End Date
+      if c.cb.asn = "R01A" then
+         $clear(T)
+         T = $rt(c.cb.rstaff,"R01ALOC","R")
+         OutRec += $formatf(T,"~~~~")
+         ''OutRec = OutRec + "TXHL"                      ' 12 Location Code
+      else
+         c_cb_svclc = $castx(c.cb.svclc)
+         OutRec += $formatf(c_cb_svclc, "~~~~")          ' 12 Location Code
+      endif
+      OutRec += $formatf(c.cb.rstaff, "~~~~")            ' 13 Case Manager
+      OutRec = StrPad(OutRec,80," ")
+      (void) $writefile(BatchFile, OutRec)
+
+      GOTO CBASECTION
+
+      CBAPASS:
+      $dbunlock()
+      $dblock()
+      retcode = $dbreadnextdst(02, client_id, c.cb.rec, c.cb.asn, c.cb.eff,
+         c.cb.laps, c.cb.efsub, c.cb.lasub, c.cb.svclc, c.cb.acod2, c.cb.ddate,
+         c.cb.rstaff)
+   enddo
+goback
+
+
+NGMSECTION:
+'--------------------------------------
+'  New Generation Medication Section
+'--------------------------------------
+   $dblock()
+   retcode = $dbread(02, client_id, c.ngm.rec, c.ngm.drug, c.ngm.stdate,
+         c.ngm.enddate, c.ngm.endreas, c.ngm.endcomm, c.ngm.fs, c.ngm.carebdt,
+         c.ngm.careedt)
+
+   do while retcode < 2
+      select ngm_action
+         case "C"
+            if c.ngm.enddate dp and c.ngm.carebdt dp and c.ngm.careedt !dp then
+               ClNGMClose = "Y"
+               c.ngm.careedt = $today
+               retcode = $dbupdate(02, client_id, c.ngm.rec, c.ngm.careedt)
+               if retcode != 0 then
+                  LockReg[++j] = client_id
+                  goback
+               endif
+            else
+               GOTO NGMPASS
+            endif
+         case "A"
+            if c.ngm.carebdt !dp and c.ngm.enddate !dp then
+               c.ngm.carebdt = $today
+               retcode = $dbupdate(02, client_id, c.ngm.rec, c.ngm.carebdt)
+               if retcode != 0 then
+                  LockReg[++j] = client_id
+                  goback
+               endif
+            elseif c.ngm.carebdt !dp and c.ngm.enddate dp then
+               c.ngm.carebdt = $today
+               c.ngm.careedt = $today
+               retcode = $dbupdate(02, client_id, c.ngm.rec, c.ngm.carebdt, c.ngm.careedt)
+               if retcode != 0 then
+                  LockReg[++j] = client_id
+                  goback
+               endif
+            else
+               GOTO NGMPASS
+            endif
+      endselect
+
+'  if c.ngm.enddate !dp and c.ngm.carebdt dp then
+'     GOTO NGMPASS
+'  elseif c.ngm.enddate !dp then
+'     ngm_action = "A"
+'     c.ngm.carebdt = $today
+'     retcode = $dbupdate(02, client_id, c.ngm.rec, c.ngm.carebdt)
+'     if retcode != 0 then
+'        LockReg[++j] = client_id
+'        goback
+'     endif
+'  elseif c.ngm.carebdt dp and c.ngm.careedt dp then
+'     GOTO NGMPASS
+'  elseif c.ngm.carebdt dp and c.ngm.careedt !dp then
+'     ngm_action = "C"
+'     c.ngm.careedt = $today
+'     retcode = $dbupdate(02, client_id, c.ngm.rec, c.ngm.careedt)
+'     if retcode != 0 then
+'        LockReg[++j] = client_id
+'        goback
+'     endif
+'  else
+'     ngm_action = "A"
+'     c.ngm.carebdt = $today
+'     c.ngm.careedt = $today
+'     retcode = $dbupdate(02, client_id, c.ngm.rec, c.ngm.carebdt, c.ngm.careedt)
+'     if retcode != 0 then
+'        LockReg[++j] = client_id
+'        goback
+'     endif
+'  endif
+
+   NGMCount++
+   Transcount++
+
+   OutRec = CN_COMP                                      ' 01 Component Code
+      + "1"                                              ' 02 Record Type
+      + "27"                                             ' 03 Transaction Code
+      + "A"                                              ' 04 Transaction Format Version
+      + $formatf(TransCount, "999999")                   ' 05 Logical Transaction Number
+      + "01"                                             ' 06 Physical Record Number
+      + "T1"                                             ' 07 Batch Number
+      + $formatf($today, "YYYYMMDD")                     ' 08 Transaction Enter Date
+      + "1721 "                                          ' 09 User ID
+      + $formatf(client_id, "~~~~~~~~~~")                ' 10 Local Case Number
+      + "          "                                     ' 11 CARE ID
+      + $formatf(ngm_action, "~")                        ' 12 Action Code
+      + $formatf(c.ngm.drug, "~~")                       ' 13 Drug Type
+      + $formatf(c.ngm.stdate, "YYYYMMDD")               ' 14 Effective Date
+      + $formatf(c.ngm.enddate, "YYYYMMDD")              ' 15 Ending Date
+      + $formatf(c.ngm.fs, "~~")                         ' 16 Fund Source
+      + "   "                                            ' 17 Next Component
+   OutRec = StrPad(OutRec,80," ")
+   (void) $writefile(BatchFile, OutRec)
+
+   OutRec = CN_COMP                                      ' 01 Component Code
+      + "1"                                              ' 02 Record Type
+      + "27"                                             ' 03 Transaction Code
+      + "A"                                              ' 04 Transaction Format Version
+      + $formatf(TransCount, "999999")                   ' 05 Logical Transaction Number
+      + "02"                                             ' 06 Physical Record Number
+      + $formatf(c.ngm.endreas, "~~")                    ' 07 End Reason
+      + $formatf(c.ngm.endcomm, "~~~~~~~~~~~~~~~~~~~~~~~~~")  ' 08 End Comment
+      + $formatf(c.reg.ln, "~~~~~~~~~~~~~~~~")           ' 09 Last Name
+      + $formatf(c.reg.fn, "~~~~~~~~~~~")                ' 10 First Name
+      + $formatf(c.reg.mn, "~~~~~~~~~~")                 ' 11 Middle Name
+   OutRec = StrPad(OutRec,80," ")
+   (void) $writefile(BatchFile, OutRec)
+
+   GOTO NGMSECTION
+
+NGMPASS:
+   $dbunlock()
+   $dblock()
+   retcode = $dbreadnextdst(02, client_id, c.ngm.rec, c.ngm.drug, c.ngm.stdate,
+      c.ngm.enddate, c.ngm.endreas, c.ngm.endcomm, c.ngm.fs, c.ngm.carebdt,
+      c.ngm.careedt)
+enddo
+goback
+
+
+'* 1st Service Follow-up data
+s_FIRSTSERV:
+
+   rc = $dbread(2, client_id, c.bd.rec, c.bd.fsdate, c.bd.fscode, c.bd.caredt)
+
+   do while rc < 2
+      if c.bd.fsdate >= $date(CN_FSStartDate) and c.bd.caredt !dp and
+         c.bd.fsdate dp and c.bd.fscode dp then
+         $dblock()
+         rc = $dbreaduid(c.bd.rec[UID],2,client_id,c.bd.rec,c.bd.caredt)
+         c.bd.caredt = $today
+         rc = $dbupdateuid(c.bd.rec[UID],2,client_id,c.bd.rec,c.bd.caredt)
+         if rc > 0 then
+            LockReg[++j] = client_id
+            goback
+         endif
+
+         FSCount++
+         Transcount++
+
+         OutRec = CN_COMP                                         ' 01 Component Code
+            + "1"                                                 ' 02 Record Type
+            + "13"                                                ' 03 Transaction Code
+            + "A"                                                 ' 04 Transaction Format Version
+            + $formatf(TransCount, "999999")                      ' 05 Logical Transaction Number
+            + "01"                                                ' 06 Physical Record Number
+            + "T1"                                                ' 07 Batch Number
+            + $formatf($today, "YYYYMMDD")                        ' 08 Transaction Enter Date
+            + "1721 "                                             ' 09 User ID
+            + $formatf(client_id, "~~~~~~~~~~")                   ' 10 Local Case Number
+            + $mchar(" ",10)                                      ' 11 ClientID (CARE ID)
+            + $formatf(c.ln, "~~~~~~~~~~~~~~~~")                  ' 12 Last Name
+            + $mchar(" ",3)                                       ' 13 Suffix
+            + $formatf(c.fn, "~~~~~~~~~~~")                       ' 14 First Name
+         OutRec = StrPad(OutRec,80," ")
+         (void) $writefile(BatchFile, OutRec)
+
+         OutRec = CN_COMP                                         ' 01 Component Code
+            + "1"                                                 ' 02 Record Type
+            + "13"                                                ' 03 Transaction Code
+            + "A"                                                 ' 04 Transaction Format Version
+            + $formatf(TransCount, "999999")                      ' 05 Logical Transaction Number
+            + "02"                                                ' 06 Physical Record Number
+            + $formatf(c.mn,"~~~~~~~~~~")                         ' 07 Middle Name
+            + $formatf(c.bd.fscode,"~~~~")                        ' 08 Serv Type
+            + $formatf(c.bd.fsdate,"YYYYMMDD")                    ' 09 Effective Date
+         OutRec = StrPad(OutRec,80," ")
+         (void) $writefile(BatchFile, OutRec)
+
+         T = $formatf(client_id,"~~~~~~~~~~")
+            + $formatf(`c.ln + ", " + c.fn`," ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
+            + $formatf(c.bd.fsdate," MM/DD/YYYY")
+            + $formatf(c.bd.fscode," ~~~~")
+
+         (void)$arrPush(fs_msg[],T)
+      endif
+      rc = $dbreadnextdst(2, client_id, c.bd.rec, c.bd.fsdate, c.bd.fscode, c.bd.caredt)
+
+      '* stop digging into layers if they are prior to start date
+      if c.bd.fsdate dp and c.bd.fsdate < $date(CN_FSStartDate) then
+         rc = 99
+      endif
+   enddo
+goback
+
+'--------------------------------------
+'  End Script Cleanup Section
+'--------------------------------------
+CLEANUP:
+   ' Write out Trailer Record
+   '#THUMB - 1002A - hardcoding our COMP_CD?
+   OutRec = "1002A" + $fmt(TransCount, "999999")
+   (void) $writefile(BatchFile, OutRec)
+   OutRec = "//"
+   (void) $writefile(BatchFile, OutRec)
+   (void) $closefile(BatchFile,"C")
+
+   ' Prepare Email Summary
+   $clear(batch-msgs[],i)
+   batch-msgs[++i] = "CARE Batch Summary"
+   batch-msgs[++i] = ""
+   %debugstart
+   batch-msgs[++i] = "** DEBUG MODE ** SYSTEM: " + $sysname
+   %debugend
+   batch-msgs[++i] = $fmt(RegCount, "Registrations:               999999")
+   batch-msgs[++i] = $fmt(RegUpdtCount, "Registration Updates:        999999")
+   batch-msgs[++i] = $fmt(DiagCount, "Diagnosis:                   999999")
+   batch-msgs[++i] = $fmt(CBACount, "Community Based Assignments: 999999")
+   batch-msgs[++i] = $fmt(NGMCount, "New Generation Medications:  999999")
+   batch-msgs[++i] = $fmt(FSCount, "First Service:  999999")
+   batch-msgs[++i] = $fmt(TransCount, "Total Records Submitted:     999999")
+   batch-msgs[++i] = ""
+   batch-msgs[++i] = $fmt(ClCount, "Client Count: 9999999")
+   batch-msgs[++i] = ""
+   batch-msgs[++i] = "Transcript:"
+
+   ' FTP File
+   '--------------------------------------
+   '  Submit File to State
+   '--------------------------------------
+   if p_ftp = "Y" then
+      $clear(ftp-msg[], ftpcmds[])
+
+      ftpcmds[1]  = "ascii"
+      ftpcmds[2]  = "site filetype=jes"
+      ftpcmds[3]  = "put " + BatchFilename + $fmt($today, " BatchYYMMDD")
+
+      if p_ftpsite1 dp then
+         retcode2 = $ftp(ftpcmds[], p_ftpsite1, p_login1, p_pass1, p_localdir, , ftp-msg[])
+
+         rc = $arraymerge(batch-msgs[],ftp-msg[])
+         (void)$arrPush(batch-msgs[], `$fmt(retcode2, " FTP Error Code RZ9")`)
+         (void)$arrPush(batch-msgs[], " ")
+
+         '--------------------------------------
+         '  Archive FTP Commands to do
+         '--------------------------------------
+         'only archive in production mode
+         'p_ftp should never by "Y" during testing, but this is just for safety
+         if $sysname = CN_ProdSys then
+            $clear(unix-cmd, unix-msg[], ftpcmds[],ftp-msg[])
+            unix-cmd = "cp " + BatchFilename + " " + CN_ArchivePath + $fmt($today, "BatchYYMMDD")
+            retcode1 = $unix(unix-cmd, unix-msg[])
+
+            ftpcmds[1]  = "ascii"                  ' Text Transfer Mode
+            ftpcmds[2]  = "put " + BatchFilename + $fmt($today, " BatchYYMMDD")
+            ftpcmds[3]  = "pwd"                    ' Show remote directory
+            ftpcmds[4]  = "dir *.*"                ' Show matching files (confirmation)
+         endif
+
+      else
+         (void)$arrPush(batch-msgs[],"*** ERROR *** NO FTP SITE SPECIFIED IN PARM P_FTPSITE1 ***")
+      endif
+
+      if p_ftpsite2 dp and $sysname = CN_ProdSys then
+         retcode1 = $ftp(ftpcmds[], p_ftpsite2, p_login2, p_pass2, p_localdir, p_remotedir2, ftp-msg[])
+
+         rc = $arraymerge(batch-msgs[],ftp-msg[])
+         (void)$arrPush(batch-msgs[], `$fmt(retcode2, " FTP Error Code RZ9")`)
+         (void)$arrPush(batch-msgs[], `"Files placed in directory on the remote server: " + p_remotedir2`)
+         (void)$arrPush(batch-msgs[], " ")
+
+         i = $maxarray(batch-msgs[])      'reset I for stuff below
+      endif
+
+   else
+      batch-msgs[++i] = "** FTP PROCESS SKIPPED - SEE p_ftp VAR **"
+   endif
+
+   ' Append Locked Register Listing to Email
+   if $maxarray(LockReg[]) > 0 then
+      batch-msgs[++i] = "Locked Registers:"
+      rc = $arraymerge(batch-msgs[],ftp-msg[])
+   endif
+
+   ' Send Email
+   if ((retcode1 = 0 and retcode2 = 0) or (p_ftp != "Y")) then
+      if $maxarray(LockReg[]) > 0 then
+         retcode1 = lib_email:send_email(to[],,,"CARE Batch Sent - Locks",batch-msgs[])
+      else
+         retcode1 = lib_email:send_email(to[],,,"CARE Batch Sent",batch-msgs[])
+      endif
+   else
+      retcode1 = lib_email:send_email(to[],,,"CARE Batch Error",batch-msgs[])
+   endif
+
+   '* Follow-Up service confirmation email
+   if p_fsemail = "Y" and fs_msg[] dp then
+      i = $maxarray(fs_msg[])
+      fs_msg[++i] = $mchar("-",70)
+      fs_msg[++i] = "Note:  This is an automated message from CMHC to help confirm the 1st Service Follow-Up records that were batched."
+      fs_msg[++i] = $mchar("-",70)
+
+      $clear(fs_to[],i)
+      fs_to[++i] = Notify
+      if p_fsemailto dp then
+         fs_to[++i] = p_fsemailto
+      endif
+      '*re-clear when debugging to only email MIS
+      %debugstart
+      $clear(fs_to[],i)
+      %debugend
+      fs_to[++i] = Notify2
+
+      rc = lib_email:send_email(fs_to[],,,"CARE Batch - Follow-Up Records",fs_msg[])
+   endif
+
+   ' Let the user know we are done.
+   if ($operioallow = "Y") then
+      $disp("{{{{{ Done FTP                    }}}}}", 23, 20)
+      $disp("{{ All done.  Press the ENTER key to exit }}", 23, 20)
+      $acpt(OK, 23, 75, 1, "X")       ' Any Key Stroke to exit
+   endif
+
+goback
+
+
+'--------------------------------------
+'  Initialization Section
+'--------------------------------------
+_init:
+   if parmfile !dp then
+      parmfile = CN_DefaultParm
+   endif
+
+   getParm(parmfile,"P_*")
+
+   $looplimit     = 0             ' Disable Loop Limit
+   TransCount     = 0             ' Initialize Transaction Counter
+   RegCount       = 0             ' Initialize Registration Record Counter
+   RegUpdtCount   = 0             ' Initialize Registration Update Record Counter
+   DiagCount      = 0             ' Initialize Diagnosis Record Counter
+   CBACount       = 0             ' Initialize Community Based Assignment Counter
+   NGMCount       = 0             ' Initialize New Generation Medication Counter
+   ClCount        = 0             ' Initialize Client Count
+   FSCount        = 0
+   to[1]          = Notify
+   to[2]          = Notify2
+
+   j = 0
+   oneyear = $today - 365
+   $clear(LockReg[])
+   if $loadlib(lib_email, "lib_EMAIL") > 0 then
+      rc = $email(to[],"CARE-SUBMIT ERROR","Error loading lib_EMAIL")
+      return
+   endif
+
+   ' Open Output File
+   BatchFile      = $fileavail()                ' Get Available File Number
+   BatchFilename  = "/c0/carebatch/tempbatch"   ' Define File Name and Path
+
+   '** debug
+   ' - different file
+   ' - no ftp
+   ' - only email Notify2 (MIS)
+   %debugstart
+   BatchFilename  = "/tmp/tempbatch"
+   p_ftp = "N"
+   $clear(to[])
+   to[1] = Notify2
+   %debugend
+
+   if $sysname != CN_ProdSys then
+      p_ftp = "N"
+      BatchFilename = "/tmp/tempbatch"
+      $clear(to[])
+      to[1] = Notify2
+   endif
+
+   retcode = $openfile(Batchfile, BatchFilename, "O")
+   if retcode > 0 then
+      '#thumb add email
+      $errmsg1 = $fmt(retcode,"ERROR - Could not open the output file.  RC:99")
+      return                                    '
+   endif
+
+   ' Write JCL to file
+   '#thumb - use constant CN_COMP vs hardcoding in 100
+   OutRec = "//BC2A100 JOB (E200-,5408,003,005,1000001),"
+   (void) $writefile(BatchFile, OutRec)
+   OutRec = "//  '100 CARE BATCH TX',"
+   (void) $writefile(BatchFile, OutRec)
+   OutRec = "//  MSGCLASS=J,CLASS=I"
+   (void) $writefile(BatchFile, OutRec)
+   OutRec = "/*JOBPARM ROOM=FS"
+   (void) $writefile(BatchFile, OutRec)
+   OutRec = "/*ROUTE PRINT LOCAL"
+   (void) $writefile(BatchFile, OutRec)
+   OutRec = "//CARE EXEC EC027090,COMP=100"
+   (void) $writefile(BatchFile, OutRec)
+   OutRec = "//DATA DD * "
+   (void) $writefile(BatchFile, OutRec)
+
+   ' Open a window & prompt for user input
+   if $operioallow = "Y" then
+      $openwin(win, 1, 24, 1, 80)
+      $disp("CARE Batch Processor", 2, 25, ,"H")
+      $disp("This script prepares the CARE batch file for submission", 4, 15)
+      $disp("Ok to run script?", 23, 5)
+      do while 1 = 1
+         $acpt(OK, 23, 23, 1, "YN")
+         if ($acptkey = "F9"  or  OK = "N") then
+             return
+         endif
+
+         if $uc(OK) = "Y" then
+            $disp("{{{{{ Processing .... Please Wait }}}}}", 23, 20)
+            $disp("Client ID:", 6, 5)
+            goback
+         endif
+         $disp("", 23, 5, 25)
+      enddo
+   endif
+goback
+
+end care-submit
+
+%include inc_GetParm
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+dynamic FUNCTION get_axis1(code) is x
+   code        is x
+   diag.care   is x
+   rc          is b
+
+   rc = $dbread(71, code, diag.care)
+   if rc = 0 then
+      get_axis1 = diag.care
+   else
+      get_axis1 = code
+   endif
+end get_axis1
+
+dynamic FUNCTION get_axis2(code) is x
+   code     is x
+   ii.care  is x
+   rc       is b
+
+   rc = $dbread(72, code, ii.care)
+   if rc = 0 then
+      get_axis2 = ii.care
+   else
+      get_axis2 = code
+   endif
+
+end get_axis2
+
+''''''''''''''''''''''''''''''''''''''''''''''
+'StrPad: << To pad a string with a certain character if it's less than
+'  the specified length
+'
+' str: string to pad
+' len: target length          (DEFAULT:80)
+' chr: character to pad with  (DEFAULT: [space])
+'
+' returns: padded string
+dynamic FUNCTION StrPad(str,len,chr) is x
+   str      is x
+   len      is b
+   chr      is x
+   i        is i
+
+   if str !dp then return endif
+   if len !dp then len = 80 endif
+   if chr !dp then chr = " " endif
+
+   StrPad = str
+   i = len - $len(str)
+   if i > 0 then
+      StrPad += $mchar(chr,i)
+   endif
+
+end StrPad
