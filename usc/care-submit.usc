@@ -122,6 +122,32 @@ start care-submit(parmfile, option, retcode)
    c.reg.c.ln        is x           ' Previous Client Last Name
    c.reg.c.fn        is x           ' Previous Client First Name
    c.reg.chdt        is d           ' Registration Record Change Date???
+   ' Registartion Mapping Variables
+   M_c.reg.sub       is x           ' Registration Record Submit Date
+   M_c.reg.hdr       is x           ' Registration Record Header Field
+   M_c.reg.subdt     is x           ' Registration Update Submit Date
+   M_c.reg.force     is x           ' Y/N field to force Registration Update Record Submission
+   M_c.reg.exclude   is x           ' Y/N field to exclude Registration Update Record submission
+   M_c.reg.uid       is x           ' Unique Record ID for Registration Record
+   M_c.reg.dt        is x           ' Registration Date
+   M_c.reg.pp        is x           ' Presenting Problem ( Axis 1 or 2)
+   M_c.reg.ln        is x           ' Client Last Name
+   M_c.reg.sufx      is x           ' Client Name Suffix
+   M_c.reg.fn        is x           ' Client First Name
+   M_c.reg.mn        is x           ' Client Middle Name
+   M_c.reg.sex       is x           ' Client Gender
+   M_c.reg.eth       is x           ' Client Ethnicity
+   M_c.reg.bd        is x           ' Client Birth Date
+   M_c.reg.ssn       is x           ' Client Social Security Number
+   M_c.reg.street    is x           ' Client Address - Street
+   M_c.reg.city      is x           ' Client Address - City
+   M_c.reg.cityd     is x           ' Client Address - City Description
+   M_c.reg.state     is x           ' Client Address - State
+   M_c.reg.zip       is x           ' Client Address - Zip Code
+   M_c.reg.county    is x           ' Client Address - County Code
+   M_c.reg.c.ln      is x           ' Previous Client Last Name
+   M_c.reg.c.fn      is x           ' Previous Client First Name
+   M_c.reg.chdt      is x           ' Registration Record Change Date???
    ' correspondence information added 7/15/2009
    c.reg.cor.fn      is x
    c.reg.cor.ln      is x
@@ -132,9 +158,22 @@ start care-submit(parmfile, option, retcode)
    c.reg.cor.cityd   is x
    c.reg.cor.phone   is x
    c.reg.cor.rel     is x
+   ' correspondence information Mapping Variables
+   M_c.cor.fn        is x
+   M_c.cor.ln        is x
+   M_c.cor.str       is x
+   M_c.cor.city      is x
+   M_c.cor.state     is x
+   M_c.cor.zip       is x
+   M_c.cor.cityd     is x
+   M_c.cor.phone     is x
+   M_c.cor.rel       is x
    'financial
    c.reg.pp.fam      is b        ' family size
    c.reg.pp.inc      is n        ' annual adjusted gross income
+   ' financial mappint variables
+   M_c.reg.pp.fam    is b        ' family size
+   M_c.reg.pp.inc    is n        ' annual adjusted gross income
 
    ' Diagnosis Record (ICD-10)
    dx_library        is x
@@ -229,6 +268,43 @@ start care-submit(parmfile, option, retcode)
    c.socqdate        is d           ' Diagnosis SQ Test Date
    c.socqtest        is x           ' Diagnosis SQ Test Type
 
+   ' Diagnosis Record Mapping Variables
+   M_c.dxrec         is x           ' Diagnosis Record Header
+   M_c.dx.caredt     is x           ' Diagnosis CARE Submission Date
+   M_c.dxdate        is x           ' Diagnosis Effective Date
+   M_c.dxaxi1mh      is x           ' Diagnosis Axis 1 Level 1
+   M_c.dxaxi2mh      is x           ' Diagnosis Axis 1 Level 2
+   M_c.dxaxi3mh      is x           ' Diagnosis Axis 1 Level 3
+   M_c.dxaxi4mh      is x           ' Diagnosis Axis 1 Level 4
+   M_c.dxaxi5mh      is x           ' Diagnosis Axis 1 Level 5
+   M_c.dxaxi6mh      is x           ' Diagnosis Axis 1 Level 6
+   M_c.dxreason      is x           ' Diagnosis Reason Code
+   M_c.dxaxis        is x           ' Diagnosis Primary Axis
+   M_c.dxaxii1       is x           ' Diagnosis Axis 2 Level 1
+   M_c.dxaxii2       is x           ' Diagnosis Axis 2 Level 2
+   M_c.dxaxii3       is x           ' Diagnosis Axis 2 Level 3
+   M_c.dxaxii4       is x           ' Diagnosis Axis 2 Level 4
+   M_c.dxaxiii1      is x           ' Diagnosis Axis 3
+   M_c.dxax4sup      is x           ' Diagnosis Axis 4 (A)
+   M_c.dxax4soc      is x           ' Diagnosis Axis 4 (B)
+   M_c.dxax4edu      is x           ' Diagnosis Axis 4 (C)
+   M_c.dxax4occ      is x           ' Diagnosis Axis 4 (D)
+   M_c.dxax4hou      is x           ' Diagnosis Axis 4 (E)
+   M_c.dxax4eco      is x           ' Diagnosis Axis 4 (F)
+   M_c.dxax4hca      is x           ' Diagnosis Axis 4 (G)
+   M_c.dxax4leg      is x           ' Diagnosis Axis 4 (H)
+   M_c.dxax4ops      is x           ' Diagnosis Axis 4 (I)
+   M_c.dxax4non      is x           ' Diagnosis Axis 4 (J)
+   M_c.dxaxvc        is x           ' Diagnosis Axis 5 Current
+   M_c.cabl          is x           ' Diagnosis ABL Current
+   M_c.pabl          is x           ' Diagnosis ABL Potential
+   M_c.iqscore       is x           ' Diagnosis IQ Score
+   M_c.iqdate        is x           ' Diagnosis IQ Test Date
+   M_c.iqtstype      is x           ' Diagnosis IQ Test Type
+   M_c.socquot       is x           ' Diagnosis SQ Score
+   M_c.socqdate      is x           ' Diagnosis SQ Test Date
+   M_c.socqtest      is x           ' Diagnosis SQ Test Type
+
    ' Community Based Assignment Record
    c.cb.rec          is header      ' CBA Record Header
    c.cb.asn          is x           ' CBA Service Type
@@ -240,6 +316,19 @@ start care-submit(parmfile, option, retcode)
    c.cb.acod2        is x           ' CBA Delete Indicator
    c.cb.ddate        is d           ' CBA Delete Submit Date
    c.cb.rstaff       is x           ' CBA Case Manager
+
+   ' Community Based Assignment Record Mapping Variables
+   M_c.cb.rec        is x           ' CBA Record Header
+   M_c.cb.asn        is x           ' CBA Service Type
+   M_c.cb.eff        is x           ' CBA Begin Date
+   M_c.cb.laps       is x           ' CBA End Date
+   M_c.cb.efsub      is x           ' CBA CARE Begin Date Submit Date
+   M_c.cb.lasub      is x           ' CBA CARE End Date Submit Date
+   M_c.cb.svclc      is x           ' CBA Service Location
+   M_c.cb.acod2      is x           ' CBA Delete Indicator
+   M_c.cb.ddate      is x           ' CBA Delete Submit Date
+   M_c.cb.rstaff     is x           ' CBA Case Manager
+
    ' New Generation Medication Record
    c.ngm.rec         is header      ' NGM Record Header
    c.ngm.drug        is x           ' NGM Drug Code
@@ -250,15 +339,40 @@ start care-submit(parmfile, option, retcode)
    c.ngm.fs          is x           ' NGM Funding Source
    c.ngm.carebdt     is d           ' NGM CARE Submission Begin Date
    c.ngm.careedt     is d           ' NGM CARE Submission End Date
+
+   ' New Generation Medication Record
+   M_c.ngm.rec       is x           ' NGM Record Header
+   M_c.ngm.drug      is x           ' NGM Drug Code
+   M_c.ngm.stdate    is x           ' NGM Start Date
+   M_c.ngm.enddate   is x           ' NGM End Date
+   M_c.ngm.endreas   is x           ' NGM End Reason Code
+   M_c.ngm.endcomm   is x           ' NGM End Reason Comment
+   M_c.ngm.fs        is x           ' NGM Funding Source
+   M_c.ngm.carebdt   is x           ' NGM CARE Submission Begin Date
+   M_c.ngm.careedt   is x           ' NGM CARE Submission End Date
+
    ' client dst's
    c.fn              is x
    c.ln              is x
    c.mn              is x
+   
+   ' client dst's
+   M_c.fn            is x
+   M_c.ln            is x
+   M_c.mn            is x
+
    ' Bed days record
    c.bd.rec          is r
    c.bd.fsdate       is d
    c.bd.fscode       is x
    c.bd.caredt       is d
+
+   ' Bed days record
+   M_c.bd.rec        is x
+   M_c.bd.fsdate     is x
+   M_c.bd.fscode     is x
+   M_c.bd.caredt     is x
+
    fscount           is b
    fs_to[]           is x
    fs_msg[]          is x
@@ -1548,6 +1662,121 @@ _init:
 
    dx_aamd_vers = "77"
 
+   'default dst mapping
+
+   ' client dst's
+   m_c.fn = $varname(c.fn)
+   m_c.ln = $varname(c.ln)
+   m_c.mn = $varname(c.mn)
+
+   ' Registration Record
+   m_c.reg.sub     = $varname(c.reg.sub    )
+   m_c.reg.hdr     = $varname(c.reg.hdr    )
+   m_c.reg.subdt   = $varname(c.reg.subdt  )
+   m_c.reg.force   = $varname(c.reg.force  )
+   m_c.reg.exclude = $varname(c.reg.exclude)
+   m_c.reg.uid     = $varname(c.reg.uid    )
+   m_c.reg.dt      = $varname(c.reg.dt     )
+   m_c.reg.pp      = $varname(c.reg.pp     )
+   m_c.reg.ln      = $varname(c.reg.ln     )
+   m_c.reg.sufx    = $varname(c.reg.sufx   )
+   m_c.reg.fn      = $varname(c.reg.fn     )
+   m_c.reg.mn      = $varname(c.reg.mn     )
+   m_c.reg.sex     = $varname(c.reg.sex    )
+   m_c.reg.eth     = $varname(c.reg.eth    )
+   m_c.reg.bd      = $varname(c.reg.bd     )
+   m_c.reg.ssn     = $varname(c.reg.ssn    )
+   m_c.reg.street  = $varname(c.reg.street )
+   m_c.reg.city    = $varname(c.reg.city   )
+   m_c.reg.cityd   = $varname(c.reg.cityd  )
+   m_c.reg.state   = $varname(c.reg.state  )
+   m_c.reg.zip     = $varname(c.reg.zip    )
+   m_c.reg.county  = $varname(c.reg.county )
+   m_c.reg.c.ln    = $varname(c.reg.c.ln   )
+   m_c.reg.c.fn    = $varname(c.reg.c.fn   )
+   m_c.reg.chdt    = $varname(c.reg.chdt   )
+
+   ' correspondence information added 7/15/2009
+   M_c.cor.fn    = $varname(c.reg.cor.fn   )
+   M_c.cor.ln    = $varname(c.reg.cor.ln   )
+   M_c.cor.str   = $varname(c.reg.cor.str  )
+   M_c.cor.city  = $varname(c.reg.cor.city )
+   M_c.cor.state = $varname(c.reg.cor.state)
+   M_c.cor.zip   = $varname(c.reg.cor.zip  )
+   M_c.cor.cityd = $varname(c.reg.cor.cityd)
+   M_c.cor.phone = $varname(c.reg.cor.phone)
+   M_c.cor.rel   = $varname(c.reg.cor.rel  )
+
+   'financial
+   M_c.reg.pp.fam = $varname(c.reg.pp.fam)
+   M_c.reg.pp.inc = $varname(c.reg.pp.inc)
+
+   ' Diagnosis Record (ICD-9)
+   M_c.dxrec     = $varname(c.dxrec    )
+   M_c.dx.caredt = $varname(c.dx.caredt)
+   M_c.dxdate    = $varname(c.dxdate   )
+   M_c.dxaxi1mh  = $varname(c.dxaxi1mh )
+   M_c.dxaxi2mh  = $varname(c.dxaxi2mh )
+   M_c.dxaxi3mh  = $varname(c.dxaxi3mh )
+   M_c.dxaxi4mh  = $varname(c.dxaxi4mh )
+   M_c.dxaxi5mh  = $varname(c.dxaxi5mh )
+   M_c.dxaxi6mh  = $varname(c.dxaxi6mh )
+   M_c.dxreason  = $varname(c.dxreason )
+   M_c.dxaxis    = $varname(c.dxaxis   )
+   M_c.dxaxii1   = $varname(c.dxaxii1  )
+   M_c.dxaxii2   = $varname(c.dxaxii2  )
+   M_c.dxaxii3   = $varname(c.dxaxii3  )
+   M_c.dxaxii4   = $varname(c.dxaxii4  )
+   M_c.dxaxiii1  = $varname(c.dxaxiii1 )
+   M_c.dxax4sup  = $varname(c.dxax4sup )
+   M_c.dxax4soc  = $varname(c.dxax4soc )
+   M_c.dxax4edu  = $varname(c.dxax4edu )
+   M_c.dxax4occ  = $varname(c.dxax4occ )
+   M_c.dxax4hou  = $varname(c.dxax4hou )
+   M_c.dxax4eco  = $varname(c.dxax4eco )
+   M_c.dxax4hca  = $varname(c.dxax4hca )
+   M_c.dxax4leg  = $varname(c.dxax4leg )
+   M_c.dxax4ops  = $varname(c.dxax4ops )
+   M_c.dxax4non  = $varname(c.dxax4non )
+   M_c.dxaxvc    = $varname(c.dxaxvc   )
+   M_c.cabl      = $varname(c.cabl     )
+   M_c.pabl      = $varname(c.pabl     )
+   M_c.iqscore   = $varname(c.iqscore  )
+   M_c.iqdate    = $varname(c.iqdate   )
+   M_c.iqtstype  = $varname(c.iqtstype )
+   M_c.socquot   = $varname(c.socquot  )
+   M_c.socqdate  = $varname(c.socqdate )
+   M_c.socqtest  = $varname(c.socqtest )
+
+   ' Community Based Assignment Record
+   M_c.cb.rec    = $varname(c.cb.rec   )
+   M_c.cb.asn    = $varname(c.cb.asn   )
+   M_c.cb.eff    = $varname(c.cb.eff   )
+   M_c.cb.laps   = $varname(c.cb.laps  )
+   M_c.cb.efsub  = $varname(c.cb.efsub )
+   M_c.cb.lasub  = $varname(c.cb.lasub )
+   M_c.cb.svclc  = $varname(c.cb.svclc )
+   M_c.cb.acod2  = $varname(c.cb.acod2 )
+   M_c.cb.ddate  = $varname(c.cb.ddate )
+   M_c.cb.rstaff = $varname(c.cb.rstaff)
+
+   ' New Generation Medication Record
+   M_c.ngm.rec     = $varname(c.ngm.rec    )
+   M_c.ngm.drug    = $varname(c.ngm.drug   )
+   M_c.ngm.stdate  = $varname(c.ngm.stdate )
+   M_c.ngm.enddate = $varname(c.ngm.enddate)
+   M_c.ngm.endreas = $varname(c.ngm.endreas)
+   M_c.ngm.endcomm = $varname(c.ngm.endcomm)
+   M_c.ngm.fs      = $varname(c.ngm.fs     )
+   M_c.ngm.carebdt = $varname(c.ngm.carebdt)
+   M_c.ngm.careedt = $varname(c.ngm.careedt)
+
+   ' Bed days record
+   M_c.bd.rec    = $varname(c.bd.rec   )
+   M_c.bd.fsdate = $varname(c.bd.fsdate)
+   M_c.bd.fscode = $varname(c.bd.fscode)
+   M_c.bd.caredt = $varname(c.bd.caredt)
+
    'load configuration
    getParm(parmfile,"P_*")
 
@@ -1559,6 +1788,121 @@ _init:
       'you must specify and load a library that implements the DX-interface
       return
    endif
+
+   'map the dsts
+
+   ' client dst's
+   (void)$setvarname(c.fn, m_c.fn )
+   (void)$setvarname(c.ln, m_c.ln )
+   (void)$setvarname(c.mn, m_c.mn )
+
+   ' Registration Record
+   (void)$setvarname(c.reg.sub    , m_c.reg.sub     )
+   (void)$setvarname(c.reg.hdr    , m_c.reg.hdr     )
+   (void)$setvarname(c.reg.subdt  , m_c.reg.subdt   )
+   (void)$setvarname(c.reg.force  , m_c.reg.force   )
+   (void)$setvarname(c.reg.exclude, m_c.reg.exclude )
+   (void)$setvarname(c.reg.uid    , m_c.reg.uid     )
+   (void)$setvarname(c.reg.dt     , m_c.reg.dt      )
+   (void)$setvarname(c.reg.pp     , m_c.reg.pp      )
+   (void)$setvarname(c.reg.ln     , m_c.reg.ln      )
+   (void)$setvarname(c.reg.sufx   , m_c.reg.sufx    )
+   (void)$setvarname(c.reg.fn     , m_c.reg.fn      )
+   (void)$setvarname(c.reg.mn     , m_c.reg.mn      )
+   (void)$setvarname(c.reg.sex    , m_c.reg.sex     )
+   (void)$setvarname(c.reg.eth    , m_c.reg.eth     )
+   (void)$setvarname(c.reg.bd     , m_c.reg.bd      )
+   (void)$setvarname(c.reg.ssn    , m_c.reg.ssn     )
+   (void)$setvarname(c.reg.street , m_c.reg.street  )
+   (void)$setvarname(c.reg.city   , m_c.reg.city    )
+   (void)$setvarname(c.reg.cityd  , m_c.reg.cityd   )
+   (void)$setvarname(c.reg.state  , m_c.reg.state   )
+   (void)$setvarname(c.reg.zip    , m_c.reg.zip     )
+   (void)$setvarname(c.reg.county , m_c.reg.county  )
+   (void)$setvarname(c.reg.c.ln   , m_c.reg.c.ln    )
+   (void)$setvarname(c.reg.c.fn   , m_c.reg.c.fn    )
+   (void)$setvarname(c.reg.chdt   , m_c.reg.chdt    )
+
+   ' correspondence information added 7/15/2009
+   (void)$setvarname(c.reg.cor.fn   , M_c.cor.fn    )
+   (void)$setvarname(c.reg.cor.ln   , M_c.cor.ln    )
+   (void)$setvarname(c.reg.cor.str  , M_c.cor.str   )
+   (void)$setvarname(c.reg.cor.city , M_c.cor.city  )
+   (void)$setvarname(c.reg.cor.state, M_c.cor.state )
+   (void)$setvarname(c.reg.cor.zip  , M_c.cor.zip   )
+   (void)$setvarname(c.reg.cor.cityd, M_c.cor.cityd )
+   (void)$setvarname(c.reg.cor.phone, M_c.cor.phone )
+   (void)$setvarname(c.reg.cor.rel  , M_c.cor.rel   )
+
+   'financial
+   (void)$setvarname(c.reg.pp.fam, M_c.reg.pp.fam )
+   (void)$setvarname(c.reg.pp.inc, M_c.reg.pp.inc )
+
+   ' Diagnosis Record (ICD-9)
+   (void)$setvarname(c.dxrec    , M_c.dxrec     )
+   (void)$setvarname(c.dx.caredt, M_c.dx.caredt )
+   (void)$setvarname(c.dxdate   , M_c.dxdate    )
+   (void)$setvarname(c.dxaxi1mh , M_c.dxaxi1mh  )
+   (void)$setvarname(c.dxaxi2mh , M_c.dxaxi2mh  )
+   (void)$setvarname(c.dxaxi3mh , M_c.dxaxi3mh  )
+   (void)$setvarname(c.dxaxi4mh , M_c.dxaxi4mh  )
+   (void)$setvarname(c.dxaxi5mh , M_c.dxaxi5mh  )
+   (void)$setvarname(c.dxaxi6mh , M_c.dxaxi6mh  )
+   (void)$setvarname(c.dxreason , M_c.dxreason  )
+   (void)$setvarname(c.dxaxis   , M_c.dxaxis    )
+   (void)$setvarname(c.dxaxii1  , M_c.dxaxii1   )
+   (void)$setvarname(c.dxaxii2  , M_c.dxaxii2   )
+   (void)$setvarname(c.dxaxii3  , M_c.dxaxii3   )
+   (void)$setvarname(c.dxaxii4  , M_c.dxaxii4   )
+   (void)$setvarname(c.dxaxiii1 , M_c.dxaxiii1  )
+   (void)$setvarname(c.dxax4sup , M_c.dxax4sup  )
+   (void)$setvarname(c.dxax4soc , M_c.dxax4soc  )
+   (void)$setvarname(c.dxax4edu , M_c.dxax4edu  )
+   (void)$setvarname(c.dxax4occ , M_c.dxax4occ  )
+   (void)$setvarname(c.dxax4hou , M_c.dxax4hou  )
+   (void)$setvarname(c.dxax4eco , M_c.dxax4eco  )
+   (void)$setvarname(c.dxax4hca , M_c.dxax4hca  )
+   (void)$setvarname(c.dxax4leg , M_c.dxax4leg  )
+   (void)$setvarname(c.dxax4ops , M_c.dxax4ops  )
+   (void)$setvarname(c.dxax4non , M_c.dxax4non  )
+   (void)$setvarname(c.dxaxvc   , M_c.dxaxvc    )
+   (void)$setvarname(c.cabl     , M_c.cabl      )
+   (void)$setvarname(c.pabl     , M_c.pabl      )
+   (void)$setvarname(c.iqscore  , M_c.iqscore   )
+   (void)$setvarname(c.iqdate   , M_c.iqdate    )
+   (void)$setvarname(c.iqtstype , M_c.iqtstype  )
+   (void)$setvarname(c.socquot  , M_c.socquot   )
+   (void)$setvarname(c.socqdate , M_c.socqdate  )
+   (void)$setvarname(c.socqtest , M_c.socqtest  )
+
+   ' Community Based Assignment Record
+   (void)$setvarname(c.cb.rec   , M_c.cb.rec    )
+   (void)$setvarname(c.cb.asn   , M_c.cb.asn    )
+   (void)$setvarname(c.cb.eff   , M_c.cb.eff    )
+   (void)$setvarname(c.cb.laps  , M_c.cb.laps   )
+   (void)$setvarname(c.cb.efsub , M_c.cb.efsub  )
+   (void)$setvarname(c.cb.lasub , M_c.cb.lasub  )
+   (void)$setvarname(c.cb.svclc , M_c.cb.svclc  )
+   (void)$setvarname(c.cb.acod2 , M_c.cb.acod2  )
+   (void)$setvarname(c.cb.ddate , M_c.cb.ddate  )
+   (void)$setvarname(c.cb.rstaff, M_c.cb.rstaff )
+
+   ' New Generation Medication Record
+   (void)$setvarname(c.ngm.rec    , M_c.ngm.rec     )
+   (void)$setvarname(c.ngm.drug   , M_c.ngm.drug    )
+   (void)$setvarname(c.ngm.stdate , M_c.ngm.stdate  )
+   (void)$setvarname(c.ngm.enddate, M_c.ngm.enddate )
+   (void)$setvarname(c.ngm.endreas, M_c.ngm.endreas )
+   (void)$setvarname(c.ngm.endcomm, M_c.ngm.endcomm )
+   (void)$setvarname(c.ngm.fs     , M_c.ngm.fs      )
+   (void)$setvarname(c.ngm.carebdt, M_c.ngm.carebdt )
+   (void)$setvarname(c.ngm.careedt, M_c.ngm.careedt )
+
+   ' Bed days record
+   (void)$setvarname(c.bd.rec   , M_c.bd.rec    )
+   (void)$setvarname(c.bd.fsdate, M_c.bd.fsdate )
+   (void)$setvarname(c.bd.fscode, M_c.bd.fscode )
+   (void)$setvarname(c.bd.caredt, M_c.bd.caredt )
 
    'set the Transaction Version for the DX batch
    'trans_vers_dx = lib-dx:getBatchVersion($today)
