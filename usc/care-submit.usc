@@ -17,6 +17,7 @@
 %define CN_DefaultParm "CARECONT"
 %define CN_FSStartDate "10/10/2011"
 %define CN_ArchivePath "/c0/carebatch/care_files/"
+%define CN_ICD10_DATE "10/01/2015"
 
 %define Notify "email@example.com"
 %define Notify2 "email2@example.com"
@@ -67,7 +68,12 @@ start care-submit(parmfile, option, retcode)
    rec_type_dx       is i
    trans_code_dx     is i
    trans_vers_dx     is x
+   phys_rec_num      is i
 
+   care_userid       is x
+
+   this_rec          is i
+   max_record        is i
 
    '********* OUTPUT VARIABLES *************
    BatchFile         is b           ' CARE Batch File Handle Number
@@ -131,8 +137,12 @@ start care-submit(parmfile, option, retcode)
    c.reg.pp.inc      is n        ' annual adjusted gross income
 
    ' Diagnosis Record (ICD-10)
+   dx_library        is x
+   lib-dx            is b
+
    dx_rec            is header
    dx_date           is d
+   dx_care_date      is d
    dx_time           is t
    dx_reason         is x
    dx_primary        is x
@@ -144,6 +154,7 @@ start care-submit(parmfile, option, retcode)
    axis2[]           is x
    axis3[]           is x
    dx_abl_cur        is x
+   dx_abl_pot        is x
    dx_aamd_1         is x
    dx_aamd_2         is x
    dx_aamd_3         is x
@@ -178,6 +189,8 @@ start care-submit(parmfile, option, retcode)
    dx_4_h            is x
    dx_4_i            is x
    dx_4_j            is x
+
+   stripdots         is x
 
    ' Diagnosis Record (ICD-9)
    c.dxrec           is header      ' Diagnosis Record Header
@@ -215,36 +228,6 @@ start care-submit(parmfile, option, retcode)
    c.socquot         is x           ' Diagnosis SQ Score
    c.socqdate        is d           ' Diagnosis SQ Test Date
    c.socqtest        is x           ' Diagnosis SQ Test Type
-   ' Diagnosis Record (ICD-10)
-   dx_library        is x
-   lib-dx            is b
-   dx_primary        is x
-   dx_date           is d
-   dx_care_date      is d
-   dx_abl_cur        is x
-   dx_abl_pre        is x
-   dx_iq             is x
-   dx_iq_test        is x
-   dx_iq_date        is d
-   dx_sq             is x
-   dx_sq_test        is x
-   dx_sq_date        is x
-   dx10_code[]       is x
-   dx09_code[]       is x
-   dx_rank[]         is x
-   dx_axis[]         is x
-   dx_gaf_cur        is x
-   dx_gaf_pre        is x
-   dx_4_a            is x
-   dx_4_b            is x
-   dx_4_c            is x
-   dx_4_d            is x
-   dx_4_e            is x
-   dx_4_f            is x
-   dx_4_g            is x
-   dx_4_h            is x
-   dx_4_i            is x
-   dx_4_j            is x
 
    ' Community Based Assignment Record
    c.cb.rec          is header      ' CBA Record Header
@@ -1568,7 +1551,11 @@ _init:
    'load configuration
    getParm(parmfile,"P_*")
 
-   if $loadlib(dx_library, lib-dx) > 0 then
+   if care_userid !dp then
+      'you must specify a care userid
+   endif
+
+   if $loadlib(lib-dx, dx_library) > 0 then
       'you must specify and load a library that implements the DX-interface
       return
    endif
