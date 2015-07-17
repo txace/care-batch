@@ -5,6 +5,7 @@
 ### Formatting Specifications
 
 |FIELD TYPE| GLOBAL FORMAT | GLOBAL ATTRIBUTES |
+| -------- | ------------- | ----------------- |
 |(N)UMERIC|| Character format, whole number, right justified, leading zeroes, not specified value=zeros |
 |(A)LPHA-NUMERIC || Left justified, padded spaces, not specified value=spaces |
 |(T)IME| HHMM| Character format, numeric digits, 24 hour military time, HH=HOUR (00-23) MM=MINUTES (00-59), not specified value=spaces |
@@ -13,6 +14,7 @@
 ### Specification
 
 |PHY REC # | REL POS | DATA ELEMENT NAME | CARE FIELD NAME | USAGE | TYPE | LEN | REQ | DESCRIPTION | VALIDATION |
+|----------| ------- | ----------------- | --------------- | ----- | ---- | --- | --- | ----------- | ---------- |
 |1|1|Component Code | COMP| Key   |   N  |  3  |  Y  || Must equal your component code|
 |1|4|Record Type|REC_TYPE|Key|N|1|Y|Transaction data record|Must equal '1'|
 |1|5|Transaction Code|TRANS|Key|N|2|Y|Batch diagnostic data transaction|Must equal '15'|
