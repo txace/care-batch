@@ -1,94 +1,9 @@
 '******************************************************************************
-'           The Gulf Coast Center
 '
 ' care-submit - This script generates the CARE Batch file for submission to the
 '       state
-'
-' NAME: care-submit
-' DATE: 03/05/2007
-' AUTHOR: Robert Hoffmann
-' REQUESTOR: Robert Dorris
 '------------------------------------------------------------------------------
-' MODIFICATIONS:
-'  03/05/07 by Robert Hoffmann
-'     Set Script Structure and Registration Piece
-' 07/15/2009 by Carlos Caldera
-' added new registration fields to hold correspondence information in the dbread
-' correspondence information added to following records:
-'  In new registration records 04 and 05
-'  In change registration records 04, 05 and 06
-'
-'RLE 20100127 ~ changed password
-'             ~ removed FTP loops to avoid password resets
-'             + enabled local archive on UNIX
-'RLE 20100218 yet another password change
-'RLE 20100519 pw change
-'RLE 20100517 added support for R01A HCS locations based on staff id
-'             added debug code for testing in an alternate MIS
-'             added p_ftp var and logic to disable FTP when not in production
-'RLE 20100729 pw change
-'RLE 20101028 pw change
-'RLE 20101209 .008 cleanup comments
-'RLE 20101217 01.2.000 - major changes:
-'  - string concatination
-'  - code structure
-'  - tabs-to-spaces
-'  - removed unnecessary junk
-'  - aligned comments for the file formats
-'RLE 20110121 .2.001
-'  - continue code cleanup
-'  - Add family size and income fields
-'  - Add StrPad() function for consistent padding of the line when changes are made
-'  - replace $format() with shorthand $fmt()
-'RLE 20110124 .2.002
-'  - added to[] array for easier emailing when testing
-'  - pw change
-'RLE 20110125 .2.003
-'  - Adjusted income formatting to not include a decimal
-'  - removed commented trailing filler statements.  StrPad works.
-'RLE 20110425 .2.004 pw change
-'RLE 20110722 .005
-'  - moved all ftp constants to a parmfile
-'  - see all the P_* vars
-'  - parmfile "CARECONT" updated
-'  - added CN_DefaultParm for safety.
-'  - v.005b added Tim to the notification
-'RLE 20110926 .006
-'  - added batching of 1st follow-up service data
-'  - removed hard-coded "tempbatch" use
-'  - include app-notify group
-'  - added archivepath constant
-'RLE 20111003 .007
-'  - CN_PRODSYS to CN_ProdSys
-'  - add constant CN_FSStartDate to prevent batching of old records
-'  - add bed days and FS-related vars
-'  - add logic to email a summary of the FS records sent
-'  - add FS record counts to interactive display and emails
-'  - adjust FS selection logic to only look at records with a fsdate and code
-'RLE 20111005 .008
-'  - adjust logic to stop FIRSTSERV loop only when fsdate is DP
-'  - include 'Notify' email address in FS notification as well.
-'RLE 20111007 .009
-'  - change count vars to numeric.  Binary is hitting the 32k limit
-'  - start client ID reads at 000102 and after to skip testing clients
-'RLE 20120425 .010
-'  - format CBA location to 4 characters for R01A HCS
-
-
-' ** TODO ***********************************************************
-'  - have a way to skip clients such as SA who don't need to be in CARE
-'  - continue cleanup
-'  - test
-'  - consider using the unix fold command for line formatting to 80 chrs
-'    in lieu of extensive script changes
-'    eg: fold -bw80 inFile > outFile
-
-' *******************************************************************
-' {{{ ABBREV
-' RLE - Robert Edeker
-' }}}
-'------------------------------------------------------------------------------
-%version 01.2.010 04/25/12 GCC
+%version 01.0.0 07/16/15 TxAce
 
 '''%debug compile
 
@@ -143,6 +58,17 @@ start care-submit(parmfile, option, retcode)
    extention         is x
    pnum              is x
    to[]              is x
+
+   ' batch transaction variables
+   comp_code         is i
+   batch_num         is x
+   trans_date        is d
+
+   rec_type_dx       is i
+   trans_code_dx     is i
+   trans_vers_dx     is x
+
+
    '********* OUTPUT VARIABLES *************
    BatchFile         is b           ' CARE Batch File Handle Number
    BatchFilename     is x           ' CARE Batch File Name
@@ -156,6 +82,11 @@ start care-submit(parmfile, option, retcode)
    '********* LIBRARY VARIABLES ***********
    lib_email         is b           ' Function to email files
    '********* DST VARIABLES *************
+   client_careid     is x
+   client_last       is x
+   client_sufx       is x
+   client_first      is x
+   client_middle     is x
    c_reg_ssn         is n           ' Client Social Security Number
    c_reg_city        is x           ' Client Address - City
    c_cb_svclc        is x           ' CBA Service Location - Text Variable
@@ -199,7 +130,56 @@ start care-submit(parmfile, option, retcode)
    c.reg.pp.fam      is b        ' family size
    c.reg.pp.inc      is n        ' annual adjusted gross income
 
-   ' Diagnosis Record
+   ' Diagnosis Record (ICD-10)
+   dx_rec            is header
+   dx_date           is d
+   dx_time           is t
+   dx_reason         is x
+   dx_primary        is x
+   dx10_code[]       is x
+   dx09_code[]       is x
+   dx_rank           is x
+   dx_axis[]         is x
+   axis1[]           is x
+   axis2[]           is x
+   axis3[]           is x
+   dx_abl_cur        is x
+   dx_aamd_1         is x
+   dx_aamd_2         is x
+   dx_aamd_3         is x
+   dx_aamd_gen       is x
+   dx_aamd_anom      is x
+   dx_aamd_sens      is x
+   dx_aamd_prec      is x
+   dx_aamd_conv      is x
+   dx_aamd_phys      is x
+   dx_aamd_moto      is x
+   dx_aamd_mloc      is x
+   dx_aamd_msev      is x
+   dx_aamd_date      is x
+   dx_iq             is i
+   dx_iq_test        is i
+   dx_iq_date        is d
+   dx_sq             is i
+   dx_sq_test        is i
+   dx_sq_date        is d
+   dx_aamd_vers      is x
+   dx_axis_vers      is x
+   dx_ax3_vers       is x
+   dx_gaf_cur        is x
+   dx_gaf_pre        is x
+   dx_4_a            is x
+   dx_4_b            is x
+   dx_4_c            is x
+   dx_4_d            is x
+   dx_4_e            is x
+   dx_4_f            is x
+   dx_4_g            is x
+   dx_4_h            is x
+   dx_4_i            is x
+   dx_4_j            is x
+
+   ' Diagnosis Record (ICD-9)
    c.dxrec           is header      ' Diagnosis Record Header
    c.dx.caredt       is d           ' Diagnosis CARE Submission Date
    c.dxdate          is d           ' Diagnosis Effective Date
@@ -235,6 +215,37 @@ start care-submit(parmfile, option, retcode)
    c.socquot         is x           ' Diagnosis SQ Score
    c.socqdate        is d           ' Diagnosis SQ Test Date
    c.socqtest        is x           ' Diagnosis SQ Test Type
+   ' Diagnosis Record (ICD-10)
+   dx_library        is x
+   lib-dx            is b
+   dx_primary        is x
+   dx_date           is d
+   dx_care_date      is d
+   dx_abl_cur        is x
+   dx_abl_pre        is x
+   dx_iq             is x
+   dx_iq_test        is x
+   dx_iq_date        is d
+   dx_sq             is x
+   dx_sq_test        is x
+   dx_sq_date        is x
+   dx10_code[]       is x
+   dx09_code[]       is x
+   dx_rank[]         is x
+   dx_axis[]         is x
+   dx_gaf_cur        is x
+   dx_gaf_pre        is x
+   dx_4_a            is x
+   dx_4_b            is x
+   dx_4_c            is x
+   dx_4_d            is x
+   dx_4_e            is x
+   dx_4_f            is x
+   dx_4_g            is x
+   dx_4_h            is x
+   dx_4_i            is x
+   dx_4_j            is x
+
    ' Community Based Assignment Record
    c.cb.rec          is header      ' CBA Record Header
    c.cb.asn          is x           ' CBA Service Type
@@ -325,7 +336,12 @@ _main:
       if c.reg.sub dp then
          ClRegistered = "Y"
          gosub REGISTRATIONUPDT
-         gosub DIAGNOSIS
+         if trans_vers_dx = "C" then
+            gosub DIAGNOSIS
+         elseif trans_vers_dx = "D" then
+            gosub ICD10
+         endif
+
          if $today >= $date(CN_FSStartDate) then
             gosub s_FIRSTSERV
          endif
@@ -730,6 +746,187 @@ REGISTRATIONUPDT:
    endif
 goback
 
+ICD10:
+   'get the dx record
+   retcode = lib-dx:getClientDx(client_id, $today, dx_rec, dx_date, dx_time, dx_primary, dx_reason, 
+      dx10_code[], dx_rank[], dx_axis[], dx09_code[])
+
+   'bail if the client register is locked
+   if retcode = 4 then
+      LockReg[++j] = client_id
+      goback
+   endif
+
+   'only submit unsubmitted records
+   if dx_care_date dp then
+      goback
+   endif
+
+   'unsubmitted records a year or older cannot be submitted
+   if dx_date <= oneyear then
+      goback
+   endif 
+
+   'sort the codes
+   stripdots = "TRUE"
+   if $today < CN_icd10_date then
+      lib-dx:sortDxByV4Axis(dx09_code[], dx_rank[], dx_axis[], stripdots, axis1[], axis2[], axis3[])
+   else
+      lib-dx:sortDxByV4Axis(dx10_code[], dx_rank[], dx_axis[], stripdots, axis1[], axis2[], axis3[])
+   endif
+
+   'get the reset of the dx values
+   lib-dx:getClientGaf(client_id, $today, dx_rec, dx_date, dx_gaf_cur, dx_gaf_pre, dx_abl_cur, dx_abl_pot)
+   lib-dx:getClientAamd(client_id, $today, dx_rec, dx_date, dx_aamd_date, dx_aamd_1, dx_aamd_2, dx_aamd_3, 
+      dx_aamd_gen, dx_aamd_anom, dx_aamd_sens, dx_aamd_prec, dx_aamd_conv, dx_aamd_phys, dx_aamd_moto, 
+      dx_aamd_mloc, dx_aamd_msev)
+   lib-dx:getClientIq(client_id, $today, dx_rec, dx_date, dx_iq, dx_iq_test, dx_iq_date, dx_sq, dx_sq_test, dx_sq_date)
+
+   'update batch stats
+   DiagCount++
+   Transcount++
+
+   'build the batch transaction
+   outrec = ""
+
+   'line 1
+   phys_rec_num = 1
+
+   outrec += addfield(comp_code, "000")
+   outrec += addfield(rec_type_dx, "0")
+   outrec += addfield(trans_code_dx, "00")
+   outrec += addfield(trans_vers_dx, "~")
+   outrec += addfield(Transcount, "000000")
+   outrec += addfield(phys_rec_num, "00")
+   outrec += addfield(batch_num, "~~")
+   outrec += addfield(trans_date, "YYYYMMDD")
+   outrec += addfield(care_userid, "~~~~~")
+   outrec += addfield(client_id, "~~~~~~~~~~")
+   outrec += addfield(client_careid, "~~~~~~~~~~")
+   outrec += addfield(client_last, "~~~~~~~~~~~~~~~~")
+   outrec += addfield(client_sufx, "~~~")
+   outrec += addfield(client_first, "~~~~~~~~~~~")
+
+   outrec = StrPad(outrec, 80, " ")
+   rc = $writefile(BatchFile, OutRec)
+
+   'line 2
+   phys_rec_num++
+
+   outrec += addfield(comp_code, "000")
+   outrec += addfield(rec_type_dx, "0")
+   outrec += addfield(trans_code_dx, "00")
+   outrec += addfield(trans_vers_dx, "~")
+   outrec += addfield(Transcount, "000000")
+   outrec += addfield(phys_rec_num, "00")
+   outrec += addfield(client_middle, "~~~~~~~~~~")
+   outrec += addfield(dx_date, "YYYYMMDD")
+   outrec += addfield(dx_time, "HHMM")
+   outrec += addfield(dx_reason, "~")
+   outrec += addfield(dx_primary, "~")
+   max_record = 5
+   this_rec = 0
+   do while this_rec++ < max_record
+      outrec += addfield(axis1[], "~~~~~~~")
+   enddo
+
+
+   outrec = StrPad(outrec, 80, " ")
+   rc = $writefile(BatchFile, OutRec)
+
+   'line 3
+   phys_rec_num++
+
+   outrec += addfield(comp_code, "000")
+   outrec += addfield(rec_type_dx, "0")
+   outrec += addfield(trans_code_dx, "00")
+   outrec += addfield(trans_vers_dx, "~")
+   outrec += addfield(Transcount, "000000")
+   outrec += addfield(phys_rec_num, "00")
+   max_record = 1
+   this_rec = 0
+   do while this_rec++ < max_record
+      outrec += addfield(axis1[], "~~~~~~~")
+   enddo
+   max_record = 4
+   this_rec = 0
+   do while this_rec++ < max_record
+      outrec += addfield(axis2[], "~~~~~~~")
+   enddo
+   outrec += addfield("", "~~~~~~~~~~~~~~~")                'filler
+   outrec += addfield(dx_abl_cur, "~")
+   outrec += addfield(dx_abl_pot, "~")
+   outrec += addfield(dx_aamd_1, "~~~")
+   outrec += addfield(dx_aamd_2, "~~~")
+   outrec += addfield(dx_aamd_3, "~~~")
+   outrec += addfield(dx_aamd_gen, "~~")
+   outrec += addfield(dx_aamd_anom, "~~")
+
+   outrec = StrPad(outrec, 80, " ")
+   rc = $writefile(BatchFile, OutRec)
+
+   'line 4
+   phys_rec_num++
+
+   outrec += addfield(comp_code, "000")
+   outrec += addfield(rec_type_dx, "0")
+   outrec += addfield(trans_code_dx, "00")
+   outrec += addfield(trans_vers_dx, "~")
+   outrec += addfield(Transcount, "000000")
+   outrec += addfield(phys_rec_num, "00")
+   outrec += addfield(dx_aamd_sens, "~~")
+   outrec += addfield(dx_aamd_prec, "~~")
+   outrec += addfield(dx_aamd_conv, "~~")
+   outrec += addfield(dx_aamd_phys, "~~")
+   outrec += addfield(dx_aamd_moto, "~~")
+   outrec += addfield(dx_aamd_mloc, "~")
+   outrec += addfield(dx_aamd_msev, "~")
+   outrec += addfield(dx_aamd_date, "YYYYMMDD")
+   outrec += addfield(dx_iq, "000")
+   outrec += addfield(dx_iq_test, "00")
+   outrec += addfield(dx_iq_date, "YYYYMMDD")
+   outrec += addfield(dx_sq, "000")
+   outrec += addfield(dx_sq_test, "00")
+   outrec += addfield(dx_sq_date, "YYYYMMDD")
+   outrec += addfield(dx_aamd_vers, "~~")
+   outrec += addfield(dx_axis_vers, "~~")
+   outrec += addfield(dx_ax3_vers, "~~")
+   outrec += addfield(dx_gaf_cur, "~~")
+   outrec += addfield(dx_gaf_pre, "~~")
+   outrec += addfield(dx_4_a, "~")
+   outrec += addfield(dx_4_b, "~")
+   outrec += addfield(dx_4_c, "~")
+   outrec += addfield(dx_4_d, "~")
+   outrec += addfield(dx_4_e, "~")
+   outrec += addfield(dx_4_f, "~")
+   outrec += addfield(dx_4_g, "~")
+   outrec += addfield(dx_4_h, "~")
+   outrec += addfield(dx_4_i, "~")
+   outrec += addfield(dx_4_j, "~")
+
+   outrec = StrPad(outrec, 80, " ")
+   rc = $writefile(BatchFile, OutRec)
+
+   'line 5
+   phys_rec_num++
+
+   outrec += addfield(comp_code, "000")
+   outrec += addfield(rec_type_dx, "0")
+   outrec += addfield(trans_code_dx, "00")
+   outrec += addfield(trans_vers_dx, "~")
+   outrec += addfield(Transcount, "000000")
+   outrec += addfield(phys_rec_num, "00")
+   max_record = 6
+   this_rec = 0
+   do while this_rec++ < max_record
+      outrec += addfield(axis3[], "~~~~~~~")
+   enddo
+   outrec += addfield(dx_date, "YYYYMMDD")
+
+   outrec = StrPad(outrec, 80, " ")
+   rc = $writefile(BatchFile, OutRec)
+
+goback
 
 DIAGNOSIS:
 '--------------------------------------
@@ -1359,7 +1556,33 @@ _init:
       parmfile = CN_DefaultParm
    endif
 
+   'set defaults
+   comp_code = $casti(CN_COMP)
+   rec_type_dx = 1
+   trans_code_dx = 15
+   batch_num = "T1"
+   trans_date = $today
+
+   dx_aamd_vers = "77"
+
+   'load configuration
    getParm(parmfile,"P_*")
+
+   if $loadlib(dx_library, lib-dx) > 0 then
+      'you must specify and load a library that implements the DX-interface
+      return
+   endif
+
+   'set the Transaction Version for the DX batch
+   'trans_vers_dx = lib-dx:getBatchVersion($today)
+   trans_vers_dx = "C"
+   dx_axis_vers = "4"
+   dx_ax3_vers  = "09"
+   if $today >= CN_icd10_date then
+      trans_vers_dx = "D"
+      dx_axis_vers = "10"
+      dx_ax3_vers  = "10"
+   endif
 
    $looplimit     = 0             ' Disable Loop Limit
    TransCount     = 0             ' Initialize Transaction Counter
@@ -1507,3 +1730,12 @@ dynamic FUNCTION StrPad(str,len,chr) is x
    endif
 
 end StrPad
+
+'
+dynamic function addfield(value, formatstr) is x
+value       is v
+formatstr   is x
+
+addfield = $formatf(value, formatstr)
+
+end addfield
