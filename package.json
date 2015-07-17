@@ -1,0 +1,19 @@
+{
+  "name": "care-batch",
+  "version": "0.0.0",
+  "description": "Care Batch",
+  "main": "deploy.js",
+  "repository": {
+    "type": "git",
+    "url": "https://argmonster@github.com/txace/care-batch.git"
+  },
+  "author": "txace",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/txace/care-batch/issues"
+  },
+  "homepage": "https://github.com/txace/care-batch",
+  "dependencies": {
+    "mis-util": "^0.5.1"
+  }
+}
