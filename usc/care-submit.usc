@@ -494,11 +494,12 @@ REGISTRATION:
             c.reg.cor.phone, c.reg.cor.rel,
             c.reg.pp.inc,c.reg.pp.fam)
 
-   if c.reg.hdr dp then
       client_last = c.reg.ln
       client_first = c.reg.fn
       client_sufx = c.reg.sufx
+      client_middle = c.reg.mn
       client_careid = ""
+   if c.reg.hdr dp then
 
       c.reg.sub       = $today
       c.reg.sub[EFFD] = $today
@@ -668,6 +669,12 @@ REGISTRATIONUPDT:
            c.reg.cor.city, c.reg.cor.state, c.reg.cor.zip, c.reg.cor.cityd,
            c.reg.cor.phone, c.reg.cor.rel,
            c.reg.pp.inc,c.reg.pp.fam)
+
+      client_last = c.reg.ln
+      client_first = c.reg.fn
+      client_sufx = c.reg.sufx
+      client_middle = c.reg.mn
+      client_careid = ""
 
    if c.reg.subdt !dp and c.reg.exclude != "Y" then
       c.reg.subdt = $today
@@ -888,7 +895,7 @@ ICD10:
    lib-dx:getClientAamd(client_id, $today, dx_rec, dx_date, dx_aamd_date, dx_aamd_1, dx_aamd_2, dx_aamd_3, 
       dx_aamd_gen, dx_aamd_anom, dx_aamd_sens, dx_aamd_prec, dx_aamd_conv, dx_aamd_phys, dx_aamd_moto, 
       dx_aamd_mloc, dx_aamd_msev)
-   lib-dx:getClientIq(client_id, $today, dx_rec, dx_date, dx_iq, dx_iq_test, dx_iq_date, dx_sq, dx_sq_test, dx_sq_date)
+   lib-dx:getClientIq(client_id, $today, dx_rec, , dx_iq, dx_iq_test, dx_iq_date, dx_sq, dx_sq_test, dx_sq_date)
 
    'update batch stats
    DiagCount++
@@ -936,7 +943,7 @@ ICD10:
    max_record = 5
    this_rec = 0
    do while this_rec++ < max_record
-      outrec += addfield(axis1[], "~~~~~~~")
+      outrec += addfield(axis1[this_rec], "~~~~~~~")
    enddo
 
 
@@ -953,15 +960,16 @@ ICD10:
    outrec += addfield(trans_vers_dx, "~")
    outrec += addfield(Transcount, "999999")
    outrec += addfield(phys_rec_num, "99")
-   max_record = 1
-   this_rec = 0
+   'finish off the record we started in the last physical record
+   max_record = 6
+   'this_rec = 0
    do while this_rec++ < max_record
-      outrec += addfield(axis1[], "~~~~~~~")
+      outrec += addfield(axis1[this_rec], "~~~~~~~")
    enddo
    max_record = 4
    this_rec = 0
    do while this_rec++ < max_record
-      outrec += addfield(axis2[], "~~~~~~~")
+      outrec += addfield(axis2[this_rec], "~~~~~~~")
    enddo
    outrec += addfield("", "~~~~~~~~~~~~~~~")                'filler
    outrec += addfield(dx_abl_cur, "~")
@@ -1031,7 +1039,7 @@ ICD10:
    max_record = 6
    this_rec = 0
    do while this_rec++ < max_record
-      outrec += addfield(axis3[], "~~~~~~~")
+      outrec += addfield(axis3[this_rec], "~~~~~~~")
    enddo
    outrec += addfield(dx_date, "YYYYMMDD")
 
