@@ -498,7 +498,7 @@ REGISTRATION:
       client_last = c.reg.ln
       client_first = c.reg.fn
       client_sufx = c.reg.sufx
-      client_care = ""
+      client_careid = ""
 
       c.reg.sub       = $today
       c.reg.sub[EFFD] = $today
