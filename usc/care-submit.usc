@@ -17,10 +17,11 @@
 %define CN_DefaultParm "CARECONT"
 %define CN_FSStartDate "10/10/2011"
 %define CN_ArchivePath "/c0/carebatch/care_files/"
-%define CN_ICD10_DATE "10/01/2015"
+'%define CN_ICD10_DATE "10/01/2015"
+%define CN_ICD10_DATE "10/01/2014"
 
-%define Notify "email@example.com"
-%define Notify2 "email2@example.com"
+%define Notify "tim@gulfcoastcenter.org"
+%define Notify2 "tim@gulfcoastcenter.org"
 
 start care-submit(parmfile, option, retcode)
    '********* SCRIPT ARGUMENTS *************
@@ -59,6 +60,8 @@ start care-submit(parmfile, option, retcode)
    extention         is x
    pnum              is x
    to[]              is x
+   reg_limit         is b
+   trace_path        is x
 
    ' batch transaction variables
    comp_code         is i
@@ -466,6 +469,9 @@ _main:
       %debugend
 
       retcode1 = $dbreadnext(02, client_id, c.reg.sub, c.ln, c.fn, c.mn)
+      if ClCount > reg_limit then
+         retcode1 = 99
+      endif
    enddo
 
    gosub CLEANUP
@@ -489,6 +495,11 @@ REGISTRATION:
             c.reg.pp.inc,c.reg.pp.fam)
 
    if c.reg.hdr dp then
+      client_last = c.reg.ln
+      client_first = c.reg.fn
+      client_sufx = c.reg.sufx
+      client_care = ""
+
       c.reg.sub       = $today
       c.reg.sub[EFFD] = $today
       retcode = $dbupdate(02, client_id, c.reg.sub)
@@ -1907,6 +1918,10 @@ _init:
    (void)$setvarname(c.bd.fsdate, M_c.bd.fsdate )
    (void)$setvarname(c.bd.fscode, M_c.bd.fscode )
    (void)$setvarname(c.bd.caredt, M_c.bd.caredt )
+
+   if trace_path dp then
+      $trace("path,on", trace_path)
+   endif
 
    'set the Transaction Version for the DX batch
    'trans_vers_dx = lib-dx:getBatchVersion($today)
