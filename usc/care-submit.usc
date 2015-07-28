@@ -206,7 +206,7 @@ start care-submit(parmfile, option, retcode)
    dx_aamd_moto      is x
    dx_aamd_mloc      is x
    dx_aamd_msev      is x
-   dx_aamd_date      is x
+   dx_aamd_date      is d
    dx_iq             is i
    dx_iq_test        is i
    dx_iq_date        is d
@@ -889,12 +889,12 @@ ICD10:
    'line 1
    phys_rec_num = 1
 
-   outrec += addfield(comp_code, "000")
-   outrec += addfield(rec_type_dx, "0")
-   outrec += addfield(trans_code_dx, "00")
+   outrec += addfield(comp_code, "999")
+   outrec += addfield(rec_type_dx, "9")
+   outrec += addfield(trans_code_dx, "99")
    outrec += addfield(trans_vers_dx, "~")
-   outrec += addfield(Transcount, "000000")
-   outrec += addfield(phys_rec_num, "00")
+   outrec += addfield(Transcount, "999999")
+   outrec += addfield(phys_rec_num, "99")
    outrec += addfield(batch_num, "~~")
    outrec += addfield(trans_date, "YYYYMMDD")
    outrec += addfield(care_userid, "~~~~~")
@@ -909,13 +909,14 @@ ICD10:
 
    'line 2
    phys_rec_num++
+   outrec = ""
 
-   outrec += addfield(comp_code, "000")
-   outrec += addfield(rec_type_dx, "0")
-   outrec += addfield(trans_code_dx, "00")
+   outrec += addfield(comp_code, "999")
+   outrec += addfield(rec_type_dx, "9")
+   outrec += addfield(trans_code_dx, "99")
    outrec += addfield(trans_vers_dx, "~")
-   outrec += addfield(Transcount, "000000")
-   outrec += addfield(phys_rec_num, "00")
+   outrec += addfield(Transcount, "999999")
+   outrec += addfield(phys_rec_num, "99")
    outrec += addfield(client_middle, "~~~~~~~~~~")
    outrec += addfield(dx_date, "YYYYMMDD")
    outrec += addfield(dx_time, "HHMM")
@@ -933,13 +934,14 @@ ICD10:
 
    'line 3
    phys_rec_num++
+   outrec = ""
 
-   outrec += addfield(comp_code, "000")
-   outrec += addfield(rec_type_dx, "0")
-   outrec += addfield(trans_code_dx, "00")
+   outrec += addfield(comp_code, "999")
+   outrec += addfield(rec_type_dx, "9")
+   outrec += addfield(trans_code_dx, "99")
    outrec += addfield(trans_vers_dx, "~")
-   outrec += addfield(Transcount, "000000")
-   outrec += addfield(phys_rec_num, "00")
+   outrec += addfield(Transcount, "999999")
+   outrec += addfield(phys_rec_num, "99")
    max_record = 1
    this_rec = 0
    do while this_rec++ < max_record
@@ -964,13 +966,14 @@ ICD10:
 
    'line 4
    phys_rec_num++
+   outrec = ""
 
-   outrec += addfield(comp_code, "000")
-   outrec += addfield(rec_type_dx, "0")
-   outrec += addfield(trans_code_dx, "00")
+   outrec += addfield(comp_code, "999")
+   outrec += addfield(rec_type_dx, "9")
+   outrec += addfield(trans_code_dx, "99")
    outrec += addfield(trans_vers_dx, "~")
-   outrec += addfield(Transcount, "000000")
-   outrec += addfield(phys_rec_num, "00")
+   outrec += addfield(Transcount, "999999")
+   outrec += addfield(phys_rec_num, "99")
    outrec += addfield(dx_aamd_sens, "~~")
    outrec += addfield(dx_aamd_prec, "~~")
    outrec += addfield(dx_aamd_conv, "~~")
@@ -979,11 +982,11 @@ ICD10:
    outrec += addfield(dx_aamd_mloc, "~")
    outrec += addfield(dx_aamd_msev, "~")
    outrec += addfield(dx_aamd_date, "YYYYMMDD")
-   outrec += addfield(dx_iq, "000")
-   outrec += addfield(dx_iq_test, "00")
+   outrec += addfield(dx_iq, "999")
+   outrec += addfield(dx_iq_test, "99")
    outrec += addfield(dx_iq_date, "YYYYMMDD")
-   outrec += addfield(dx_sq, "000")
-   outrec += addfield(dx_sq_test, "00")
+   outrec += addfield(dx_sq, "999")
+   outrec += addfield(dx_sq_test, "99")
    outrec += addfield(dx_sq_date, "YYYYMMDD")
    outrec += addfield(dx_aamd_vers, "~~")
    outrec += addfield(dx_axis_vers, "~~")
@@ -1006,13 +1009,14 @@ ICD10:
 
    'line 5
    phys_rec_num++
+   outrec = ""
 
-   outrec += addfield(comp_code, "000")
-   outrec += addfield(rec_type_dx, "0")
-   outrec += addfield(trans_code_dx, "00")
+   outrec += addfield(comp_code, "999")
+   outrec += addfield(rec_type_dx, "9")
+   outrec += addfield(trans_code_dx, "99")
    outrec += addfield(trans_vers_dx, "~")
-   outrec += addfield(Transcount, "000000")
-   outrec += addfield(phys_rec_num, "00")
+   outrec += addfield(Transcount, "999999")
+   outrec += addfield(phys_rec_num, "99")
    max_record = 6
    this_rec = 0
    do while this_rec++ < max_record
