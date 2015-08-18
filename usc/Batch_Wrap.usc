@@ -107,7 +107,8 @@ PostCount      is i
 
 Prescript[1] = "PPSL_LIST"
 
-'PostCount[1] = "DX10Batch"
+'PostScript[1] = "GetTransCount"
+'PostScript[2] = "DX10Batch"
 
 
 'TXBATCH Parameters
@@ -283,3 +284,4 @@ else
 endif 
 
 end HolidayYN
+
