@@ -1,0 +1,44 @@
+* parmfile for dx-batch script
+*
+* for executing from a menu
+SCRIPT dx-batch(DXCBAT)
+*
+* limit the number for registers for testing
+* set to 0 to run all clients
+reg_limit 0
+*
+* Change this for testing icd 10 codes prior to go live
+icd10_date 10/1/2015
+*
+* Change to generate a batch without updating dx records
+MarkRecordSent Y
+*
+* trace the exectuion
+*trace_path /path/to/trace/file
+*
+* enter your orgs component code
+comp_code yourcode
+*
+* enter your submission care id
+care_userid yourcareuserid
+*
+* some dsts to map
+* Make sure your dst names are CAPITALIZED
+MAP_c.suffix C.SUFFIX
+MAP_c.reg.sub C.REG.SUB
+*
+* if you don't have a careid dst then map leave the mapping blank
+MAP_c.careid 
+*
+* path to the batch file
+* NOTE * Since dx-batch is designed to work
+* with the care-batch / other scripts the batch
+* file is open in 'extend' mode - meaning that
+* a file will be created if there is not one,
+* but if there is one the file will be APPENDED
+* with by dx-batch
+batchfilename /c1/import/batch.test
+*
+* set the Transaction count starting point
+TransCount 1
+*
