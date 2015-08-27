@@ -141,6 +141,7 @@ start dx-batch(parmfile, option, retcode)
 
 gosub _init
 gosub _main
+rc = $closefile(Batchfile,"C")
 return
 
 '--------------------------------------
@@ -538,6 +539,8 @@ _init:
    endif
 goback
 
+
+
 end dx-batch
 
 %include inc_GetParm
@@ -572,3 +575,4 @@ formatstr   is x
 addfield = $formatf(value, formatstr)
 
 end addfield
+
