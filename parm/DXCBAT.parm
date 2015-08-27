@@ -1,44 +1,276 @@
-* parmfile for dx-batch script
-*
-* for executing from a menu
-SCRIPT dx-batch(DXCBAT)
-*
-* limit the number for registers for testing
-* set to 0 to run all clients
-reg_limit 0
-*
-* Change this for testing icd 10 codes prior to go live
-icd10_date 10/1/2015
-*
-* Change to generate a batch without updating dx records
-MarkRecordSent Y
-*
-* trace the exectuion
-*trace_path /path/to/trace/file
-*
-* enter your orgs component code
-comp_code yourcode
-*
-* enter your submission care id
-care_userid yourcareuserid
-*
-* some dsts to map
-* Make sure your dst names are CAPITALIZED
-MAP_c.suffix C.SUFFIX
-MAP_c.reg.sub C.REG.SUB
-*
-* if you don't have a careid dst then map leave the mapping blank
-MAP_c.careid 
-*
-* path to the batch file
-* NOTE * Since dx-batch is designed to work
-* with the care-batch / other scripts the batch
-* file is open in 'extend' mode - meaning that
-* a file will be created if there is not one,
-* but if there is one the file will be APPENDED
-* with by dx-batch
-batchfilename /c1/import/batch.test
-*
-* set the Transaction count starting point
-TransCount 1
-*
+***************This section is optional but listing any CARE Batch holidays will
+***************Prevent a batch from being submitted on that date.               
+holidays-1 09/07/2015                                                           
+holidays-2 11/26/2015                                                           
+holidays-3 11/27/2015                                                           
+holidays-4 12/24/2015                                                           
+holidays-5 12/25/2015                                                           
+holidays-6 01/01/2016                                                           
+**************                                                                  
+*Parameters needed for the Batch_Wrap script                                    
+*    The Parm SEQOUT is needed for BOTH the Wrapper Script and the TXBATCH5     
+*    Program.  This is the path and location where the CMHC Batch file will be  
+*    created.                                                                   
+SEQOUT /c4/EXPORT2/whaiter/TXFile                                               
+*                                                                               
+*    Path to the carebatch workign directory                                    
+batchdir /c4/EXPORT2/whaiter/                                                   
+*                                                                               
+*    Path to the directory where submitted carebatch files will be archived     
+historydir /c4/EXPORT2/whaiter/hx/                                              
+*                                                                               
+*    Path and filename of the file containing the production JCL to be          
+*    Prepended to the batchfile prior to submission                             
+jcl_file /c4/EXPORT2/whaiter/jcl/JCLProd.txt                                    
+*                                                                               
+*       Path and filename of the tracefile.  If no tracefile is wanted, do not  
+*       define the tracefile (ie.  traacefile)                                  
+tracefile /c4/EXPORT2/whaiter/CareTrace.txt                                     
+tracefile2 CareTrace.txt                                                        
+*                                                                               
+*       If submitfile is set to N or is not defined, the file will not be submit
+submitfile N                                                                    
+*                                                                               
+*       the ftp site to submit the files to                                     
+remote-sys hhsibmprod.hhsc.texas.gov                                            
+*                                                                               
+*       The ftp commands to correctly submit the file to the site               
+ftpcmd-1 as                                                                     
+ftpcmd-2 site filetype=jes                                                      
+ftpcmd-3 put TXFile                                                             
+ftpcmd-4 quit                                                                   
+*                                                                               
+*       Who to notify after the batch process completes                         
+ITnotify-1 whaiter@helenfarabee.org                                             
+*       Who to notify after the batch process completes                         
+notify-1 whaiter@helenfarabee.org                                               
+*                                                                               
+*Any Prescripts to run pror to creating the CMHC Batch.                         
+Prescript-1 PPSL_LIST                                                           
+*                                                                               
+*Any Postscripts to run after creating the CMHC Batch.                          
+Postscript-1 dx-batch                                                           
+*                                                                               
+**************                                                                  
+* TX CARE BATCH - REGISTRATION, DIAGNOSIS, & COMMUNITY BASED ASSIGNMENTS        
+* 07/07/2004 R. Whaite                                                          
+*--------------------------------------------------------------------*          
+*************                                                                   
+*Section Needed for the tx-batch script to create the ICD-10 Batch              
+*                                                                               
+* parmfile for dx-batch script                                                  
+*                                                                               
+* for executing from a menu                                                     
+*SCRIPT dx-batch(TXB2015)                                                       
+SCRIPT Batch_Wrap(TXB2015)                                                      
+*                                                                               
+* limit the number for registers for testing                                    
+* set to 0 to run all clients                                                   
+reg_limit 13000                                                                 
+*                                                                               
+* Change this for testing icd 10 codes prior to go live                         
+icd10_date 10/1/2015                                                            
+*                                                                               
+* Change to generate a batch without updating dx records                        
+MarkRecordSent N                                                                
+*                                                                               
+* trace the exectuion                                                           
+*trace_path /c4/EXPORT2/whaiter/trace.txt                                       
+*                                                                               
+* enter your orgs component code                                                
+comp_code 230                                                                   
+*                                                                               
+* enter your submission care id                                                 
+care_userid BATCH                                                               
+*                                                                               
+* some dsts to map                                                              
+* Make sure your dst names are CAPITALIZED                                      
+MAP_c.suffix                                                                    
+MAP_c.reg.sub C.TXB.REG.FLG                                                     
+*                                                                               
+* if you don't have a careid dst then map leave the mapping blank               
+MAP_c.careid                                                                    
+*                                                                               
+* path to the batch file                                                        
+* NOTE * Since dx-batch is designed to work                                     
+* with the care-batch / other scripts the batch                                 
+* file is open in 'extend' mode - meaning that                                  
+* a file will be created if there is not one,                                   
+* but if there is one the file will be APPENDED                                 
+* with by dx-batch                                                              
+batchfilename /c4/EXPORT2/whaiter/TXFile                                        
+*                                                                               
+* set the Transaction count starting point                                      
+TransCount 0                                                                    
+*                                                                               
+*************                                                                   
+*                                                                               
+*        TEXAS SERVIC ACTIVITY SYSTEM TAPE PARAMETER FILE            *          
+*                                                                    *          
+1...5...10...15...20...25...30...35...40...45...50...55...60...65... *          
+AA..BBB..CCCCD..EEEEEEEEX FFFFFFFF  GGGGGGGG  HHHH I                 *          
+TC FIELD  DST*   OUTPUT    INPUT   RECORD TBL DCT  O  COMMENTS       *          
+-- ----  -----  --------- -------  ---------- ---  -  ---------------*          
+*------------------- Here is the Specifications -----------------*              
+*REPORTONLY                                                                     
+TESTOUT Y                                                                       
+CLLIST PPSL                                                                     
+COMPCODE 230                                                                    
+BATCHNO Z1                                                                      
+TRLVERSION A                                                                    
+USERID BATCH                                                                    
+PQOUT N                                                                         
+*SEQOUT /c0/EXPORT/trace/TXFile                                                 
+*SEQOUT /c0/EXPORT/carebatch/TXFile                                             
+REFLAGDST 858                                                                   
+*-----------------REGISTRATION CHANGE                                           
+RCRECHDR 6790                                                                   
+RCFLAGDST 6792                                                                  
+SARECHDR 1720                                                                   
+SAFLAGDST 1727                                                                  
+SAENDFLAGDST 1728                                                               
+FURECHDR 2354                                                                   
+FUFLAGDST 2357                                                                  
+* ---( Batch Registration Data Record #1 Type 05)*                              
+* --- Buids the Address Record                                                  
+01  000 00149                                        Builds the Address Record  
+01  000 00054                                        Street                     
+01  000 00056                                        City                       
+01  000 00057                                        State                      
+01  000 00058                                        Zip                        
+01  000 00068                                        County                     
+*  --- End Build Address Record                                                 
+01  003         05                                   Transaction Code           
+01  004         A                                    Transaction Version        
+01  006         01                                   Physical Record Number     
+01  010 00050                                        Local Case Number          
+01  011 00051                                        Last Name                  
+01  013 00052                                        First Name                 
+* --- (Batch Registration Data Record #2) ---*                                  
+02  003         05                                   Transaction Code           
+02  004         A                                    Transaction Version        
+02  006         02                                   Physical Record Number     
+02  007 00061                                        Sex                        
+02  008 00062                                 0023 2 Ethnicity                  
+02  009 00063                                        Birthdate                  
+02  010 00060                                        Social Security Number     
+02  010 00060   U         <DNP>                      SSAN Unknown               
+02  011 00500                                 0051 1 Presenting Problem         
+* ---- Record 2 Field 12 below is used as selection field ---*                  
+02  012 01993                                        Registration Date          
+02  013 01994                                        Registration Time          
+*02  000 00149                                        Builds the Address Record 
+02  014 00054                                        Street                     
+*--- (Batch Registration Data Record #3 Type 03)*                               
+03  003         05                                   Transaction Code           
+03  004         A                                    Transaction Version        
+03  006         03                                   Physical Record Number     
+03  007 00056                                        City                       
+03  008 00057                                        State                      
+03  009 00058                                        Zip                        
+03  010 00068                                        County                     
+03  013 00100                                        Annual Income              
+03  014 00071                                        Family Size                
+*--- (Batch Registration Data Record #4 Type 05)*                               
+04  003         05                                   Transaction Code           
+04  004         A                                    Transaction Version        
+04  006         04                                   Physical Record Number     
+*--- (Batch Registration Data Record #5 Type 05)*                               
+05  003         05                                   Transaction Code           
+05  004         A                                    Transaction Version        
+05  006         05                                   Physical Record Number     
+*--- (Batch Registration Data Record #6 Type 06)*                               
+06  003         05                                   Transaction Code           
+06  004         A                                    Transaction Version        
+06  006         06                                   Physical Record Number     
+*--- (Batch Registration Data Record #7 Type 07)*                               
+07  003         05                                   Transaction Code           
+07  004         A                                    Transaction Version        
+07  006         07                                   Physical Record Number     
+*--- (Batch Registration Data Record #8 Type 08)*                               
+08  003         05                                   Transaction Code           
+08  004         A                                    Transaction Version        
+08  006         08                                   Physical Record Number     
+*  Batch Registration Change #01                                                
+09  003 00000   07                                    Transaction Code          
+09  004 00000   A                                     Format Version            
+09  006 00000   01                                    Physical Record #         
+09  010 00050                                         Client ID                 
+09  011 06793                                         Previous Last Name        
+09  012 06794                                         Previous First Name       
+09  013 06791                                         Date of Change            
+*  Batch Registration Change #02                                                
+10  003 00000   07                                    Transaction Code          
+10  004 00000   A                                     Format Version            
+10  006 00000   02                                    Physical Record #         
+10  007 00051                                         New Last Name             
+10  009 00052                                         New First Name            
+10  010 00053                                         New Middle Name           
+10  011 00061   ~                                     Sex                       
+10  012 00062   ~                             0023 2  Ethnicity                 
+10  013 00063   ~~~~~~~~                              Birthdate                 
+10  014 00060                                         Social Security No.       
+10  014 00060   U         <DNP>                       -> Handle the blank       
+10  015 00500                                 0051 1  Presenting Problem        
+*  Batch Registration Change #03                                                
+11  003 00000   07                                    Transaction Code          
+11  004 00000   A                                     Format Version            
+11  006 00000   03                                    Physical Record #         
+11  007 00000   ~~~~~~~~                              Registration Date         
+11  008 00000   0300                                  Registration Time         
+11  009 00054                                         Street Address            
+11  010 00056                                         City                      
+11  011 00057                                         State                     
+11  012 00058                                         Zip                       
+*  Batch Registration Change #04                                                
+12  003 00000   07                                    Transaction Code          
+12  004 00000   A                                     Format Version            
+12  006 00000   04                                    Physical Record #         
+12  010 00100                                         New Annual Income         
+12  011 00071                                         New Family Size           
+*  Batch Registration Change #05                                                
+13  003 00000   07                                    Transaction Code          
+13  004 00000   A                                     Format Version            
+13  006 00000   05                                    Physical Record #         
+*  Batch Registration Change #06                                                
+14  003 00000   07                                    Transaction Code          
+14  004 00000   A                                     Format Version            
+14  006 00000   06                                    Physical Record #         
+*  Batch Registration Change #07                                                
+15  003 00000   07                                    Transaction Code          
+15  004 00000   A                                     Format Version            
+15  006 00000   07                                    Physical REcord #         
+*--- (Batch Follow-up #1                                                        
+22  003         13                                   TRANSACTION CODE           
+22  004         A                                    TRANSACTION VERSION        
+22  006         01                                   PHYSICAL RECORD NUMBER     
+22  010 00050                                        LOCAL CASE NUMBER          
+22  012 00051                                        LAST NAME                  
+22  014 00052                                        FIRST NAME                 
+*--- (Batch Follow-up #2                                                        
+23  003         13                                   TRANSACTION CODE           
+23  004         A                                    TRANSACTION VERSION        
+23  006         02                                   PHYSICAL RECORD NUMBER     
+23  007 00053                                        MIDDLE NAME                
+23  008 02356                                        TYPE OF SERVICE            
+23  009 02355                                        DATE OF FOLLOW-UP CONTACT  
+* Record Type 21  (batch MH Community Based Assignment #38)                     
+38  003         21                                   Transaction Code           
+38  004         A                                    Format Version             
+38  006         01                                   Physical Record #          
+38  010 00050                                        Client ID                  
+38  012 00051                                        Last Name                  
+38  014 00052                                        First Name                 
+*                (Batch MH Community Based Assignment #39)                      
+39  003         21                                   Transaction Code           
+39  004         A                                    Format Version             
+39  006         02                                   Physical Record #          
+39  008 01725                                        Type of Service            
+39  009 01721   A         A                          Action Code                
+39  009 01721   E         E                          Action Code                
+39  009 01721   A         S                          Action Code                
+39  010 01723                                        Effective Date             
+39  011 01724                                        End Date                   
+39  012 00734                                        CM Unit/RES Code           
+                                                                                
+**************Batch Ends ****************************************************** 

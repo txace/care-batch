@@ -1,63 +1,50 @@
 '********************************************************************************************
+'AUTHOR: Ralph Whaite
+'DATE: 08-27-2015                                                                            *
+%version 01.00 08/27/2015                                                                 
+'********************************************************************************************
+'Original Version of this script is TXBATCH
 'AUTHOR: Chris Love                                                                         *
 'DATE: 12-8-2004                                                                            *
-%version 01.50 08/18/2015                                                                 
-'********************************************************************************************
-'Changelog
-'12/08/2004 01.00
-'First version
 '
-'05/09/2005 01.10
-'Added a unix command, perl, to parse the file for better display of the tracefile
-' in Windows notepad.
-'Changed from sending two separate emails of the tracefile into a single command
+'Changelog
+'08/27/2005 01.00
+'		First Major Re-Write to run completely from parm file.
 
-'12/12/2005 01.20
-'Added a few variables and a select statement to append the $ftp return code to the body of the failed ftp
-' email. Also added a dbread to get the $operstaffid's email address to email them along with @MIS when this
-' happens.
-
-'05/19/2006 1.21
-'Added a check of the ftp username/password by logging into the remote system
-
-'07/19/2006 1.22
-'Added another $unix command to call a shell script that will archive the history directory
-'/c0/EXPORT/carebatch/hx/archive_dir.sh
-
-'10/31/2006 1.30
-'Added the submitted file to the email sent to the operator and mis dept
-'uuencode TXFileProd TXFileProd;
-
-'10/28/2008 1.30
-'Added a check for a batch Holiday (As published by CARE).  If $today is a batch holiday, the process
-'will automatically cancel.  Batch Holiday Dates will need to be updated each Fiscal Year.
-
-'03/09/2011 1.40
-'Converted PPSL AGS Batch to a script.  Now will run the script immediately before running
-'UA Exclude and creating the batch.
-
-'08/15/2015 1.50  R. Whaite
-'Moved Holiday checking to a function.  If no holiday checking is desired.  Just don't create the parmfile.
-
-start txbatch()
+start Batch_Wrap(parmfile, option, retcode)
 '*********************************Variables***************************************************
+'load configuration
+parmfile          is x
+option            is x     ' Parameters for script behavior (Separated by semicolon)
+                              ' Valid Options :
+retcode           is b     ' Returned code for script execution (non-zero indicates error)
+
+
+SEQOUT     is x SEQOUT     = "/c0/EXPORT/carebatch/TXFile"
+batchdir   is x batchdir   = "/c0/EXPORT/carebatch/"
+historydir is x historydir = "/c0/EXPORT/carebatch/hx/"
+jcl_file   is x jcl_file   = "/c0/EXPORT/carebatch/jcl/JCLProd.txt"
+tracefile  is x tracefile  = "/c4/EXPORT2/whaiter/CareTrace.txt"
+tracefile2 is x tracefile2 = "CareTrace.txt"
+remote-sys is x remote-sys = "hhsibmprod.hhsc.texas.gov"
+submitfile is x submitfile = "N"
+COMPCODE   is x COMPCODE   = "230"
+footertxt  is x              'Text String for footer record
+FileNum		 is b							 'File Handle for adding footer record
+CLLIST		 is x							 'Saved List ID fromt he parm file.  
+cltList[]  is x							 'Client List Array from to be handed to dx-batch if CLIST is dp
+xtranscount is x
+holidays[] is x
+ITnotify[] is x
+notify[]   is x
 
 'Misc
 go            is x
-s.email       is x 'Staff email address
 today         is x today        = $today
 day           is x day          = $seg(today,1,2)
 month         is x month        = $seg(today,4,2)
 year          is x year         = $seg(today,7,4)
-
-'Input/Output Files
-FileNameIO	  is x 'FileNameIO   = "/c0/EXPORT/carebatch/TXFile"
-batchdir      is x batchdir     = "/c0/EXPORT/carebatch/"
-historydir    is x historydir   = "/c0/EXPORT/carebatch/hx/"
-jcl_file      is x jcl_file     = "/c0/EXPORT/carebatch/jcl/JCLProd.txt"
-submit_file   is x submit_file  = "/c0/EXPORT/testing/submit.txt"
-tracefile     is x tracefile    = "/c0/EXPORT/carebatch/CareTrace.txt"
-tracefile2    is x tracefile2   = "CareTrace.txt"
+holiday				is x
 
 'User Messages
 badfile_sub   is x badfile_sub  = "The batch script could not open the batched files!"
@@ -72,13 +59,13 @@ errmsg2       is x errmsg2      = "TXBATCH2 CANCELED!!"
 ' so we can see what the return code was quicker
 linefeed      is x  linefeed  = x"0a"
 ftperror      is x  ftperror  = linefeed + linefeed + "$FTP Return code was: "
-ftperror1     is x  ftperror1 = linefeed + "1 - Login failed on remote system"
-ftperror2     is x  ftperror2 = linefeed + "2 - Local directory set failed"
-ftperror3     is x  ftperror3 = linefeed + "3 - Remote directory set failed"
-ftperror4     is x  ftperror4 = linefeed + "4 - Invalid ftp command issued"
-ftperror5     is x  ftperror5 = linefeed + "5 - File name specified doesn't exist"
-ftperror6     is x  ftperror6 = linefeed + "6 - Zero length file transferred (warning only; process is completed normally)"
-ftperror7     is x  ftperror7 = linefeed + "7 - The connection was refused by the remote system"
+ftpErrorRc[]  is x  ftpErrorRc[1] = linefeed + "1 - Login failed on remote system"
+                    ftpErrorRc[2] = linefeed + "2 - Local directory set failed"
+                    ftpErrorRc[3] = linefeed + "3 - Remote directory set failed"
+                    ftpErrorRc[4] = linefeed + "4 - Invalid ftp command issued"
+                    ftpErrorRc[5] = linefeed + "5 - File name specified doesn't exist"
+                    ftpErrorRc[6] = linefeed + "6 - Zero length file transferred (warning only; process is completed normally)"
+                    ftpErrorRc[7] = linefeed + "7 - The connection was refused by the remote system"
 
 'Return Codes
 rc 			  is i 'ftp
@@ -88,13 +75,14 @@ rc4           is i '$misprog
 rc5           is i '2nd checkfile
 ftp           is i 'Check to make sure username/password is good
 
+'We will need a tempfile for some unix commands later
+tempfile      is x  rc = $tempfile(tempfile)
+
 'Unix Commands
 cmd           is x 'generic $unix command
-fold          is x fold   = "cd " + batchdir + ";fold -bw80 TXFile > TXFile1"
-catjcl        is x catjcl = "cd " + batchdir + ";(echo | cat " + jcl_file + " TXFile1) > TXFileProd"
-rename        is x rename = "cd " + batchdir + ";mv TXFileProd TXFile" + day + month + year
-copy          is x copy   = "cd " + batchdir + ";cp TXFile" + day + month + year + " " + historydir 
-remove        is x remove = "cd " + batchdir + ";rm TXFil*"
+fold          is x fold   = "fold -bw80 " + SEQOUT + " > " + tempfile + " ; cp " + tempfile + " " + SEQOUT 
+catjcl        is x catjcl = "(echo | cat " + jcl_file + " " + SEQOUT + ") > " + tempfile + " ; cp " + tempfile + " " + SEQOUT 
+archive       is x archive = "mv " + SEQOUT + " " + historydir + "TXFile" + day + month + year
 perl          is x perl = "cd " + batchdir + ";perl -p -e 's/\n/\r\n/' < " + tracefile2 + " > Tempfile;mv Tempfile " + tracefile2
                    'Example  perl -p -e 's/\n/\r\n/' < CareTrace.txt > Tempfile;mv Tempfile CareTrace.txt
 
@@ -105,23 +93,8 @@ c							is i
 Postscript[]   is x
 PostCount      is i
 
-Prescript[1] = "PPSL_LIST"
-
-'PostScript[1] = "GetTransCount"
-'PostScript[2] = "DX10Batch"
-
-
 'TXBATCH Parameters
-parm					is x
-prog					is x
-
-'Probably don't need something that allows the date and program to be set by the system date now.  But leaving this logic here
-'now will allow other to change the parm and/or the program based on system date.  I prefer calling the program instead of the program number.  
-'One less thing to keep track of.
-if $today > 09/06/2013
-	parm = "TXB2014"
-	prog = "TXBATCH5"
-endif
+prog					is x  prog = "TXBATCH5"
 
 'FTP
 win           is i
@@ -130,23 +103,32 @@ ln            is i
 temppath      is x
 list[]        is x
 ftpcmd[]      is x
-remote-sys    is x
 login-id      is x
 login-passwd  is x
-local-dir     is x
 remote-dir    is x
-'>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>Change these variables <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-remote-sys   = "hhsibmprod.hhsc.texas.gov"	' New Remote System as of 4/17/2012
-local-dir    = "/c0/EXPORT/carebatch/"     ' sending from my local directory
-ftpcmd[1]    = "as"                        ' set the session to ascii instead of binary
-ftpcmd[2]    = "site filetype=jes"         ' tell the ftpserver what type of files we're sending
-ftpcmd[3]    = "put TXFileProd"            ' Put the file on the ftpserver
-ftpcmd[4]    = "quit"                      'close the ftp session
-'*************************************END OF VARIABLES**************************************************
 
-rc = $getparm(,parm,"SEQOUT",FileNameIO)
+'Turn on our tracefile if indicated by DP in the parmfile
+if tracefile dp
+	$trace("path.on", tracefile)
+endif
 
-if HolidayYN()	= "Y"
+$trace("off")
+getParm(parmfile)
+getOption(option)
+$trace("on")
+
+'Check if our TXFile is still in the carebatch directory, we don't want to accidetly over write a batch file that has not been
+'submitted and subsequently archived.
+rc3 = $checkfile(SEQOUT)
+if rc3 < 1
+ $disp(errmsg,17,5,80,"H")
+ $acpt()
+ return
+endif
+
+'Check for Batch Holiday.  If yes, display message and stop processing
+rc = $find($today,holidays[],1,"F")
+if rc > 0
 	$disp("STOP - Batch Holiday ",17,5,21) 
 	$disp(Holiday,17,26,22,"H")
 	$disp("Press Any key to Cancel", 19,10)
@@ -156,6 +138,7 @@ endif
 
 'Now on to processing the batch
 
+'Test for the FTP User ID and Password and make sure they are valid by doing a quick FTP command.
 $disp(`"Version: " + $scriptver`,2,65,15,"H")
 $disp("Please enter Care User ID: ",17,5,32,"H")
 $acpt(login-id,17,35,8)
@@ -172,69 +155,81 @@ if go = "Y" or go = "y"
  endif
  'Check if the username/password is still good
  $disp("Testing Password/Username",22,10,30,"H")
- ftp = $ftp(ftpcmd[4], remote-sys, login-id, login-passwd, local-dir, remote-dir)  
+ if submitfile = "Y"
+ 	ftp = $ftp(ftpcmd[4], remote-sys, login-id, login-passwd, batchdir, remote-dir)  
+ else
+ 	ftp = 0
+ endif
  if ftp = 1
   $erasewin(0)
   $disp("BAD USERNAME OR PASSWORD ENTERED!!! ",17,5,32,"H")
   $acpt()
   return 
  endif 
+endif
  
  'See if any Prescripts and defined and call them in order
+ $disp("Running Pre-Processing Scripts",22,10,30,"H")
+ $clear(c)
  PreCount = $maxarray(PreScript[])
- do while c++ <= PreCount
- 	call PreScript[c]
+ do while c++ < PreCount
+ 	$trace("off")
+ 	call PreScript[c](parmfile,option,retcode)
+  $trace("on") 
  enddo
 
-'Turn on our tracefile
-'$trace("path", tracefile)
-'$trace("on")
 
- 'Check if our TXFile is still in the carebatch directory
- rc3 = $checkfile(FileNameIO)
- 'If it was there issue error message, dunno why it would still be there tho
- if rc3 < 1
-  $disp(errmsg,17,5,80,"H")
-  $acpt()
- '...else if it wasnt there go ahead and launch txbatch2 with parm txb2005
- else 
-  rc4 = $misprog(prog,parm)
-  rc5 = $checkfile(FileNameIO)
+  rc4 = $misprog(prog,parmfile)
+  rc5 = $checkfile(SEQOUT)
+
   'Ok, if our program ran fine then do our unix commands and ftp our file
   if rc5 = 0
   (void)$unix(fold)
 
- 'See if any Prescripts and defined and call them in order
+	transcount(seqout)  'This functions gets the transaction count from the file and removes the footer record
+	
+	option += "transcount`" + $castx(transcount) + ";"
+	option += ";batchfilename`" + SEQOUT + ";"
+
+'See if a list ID was defined in the parfile.  If yes, put that client list into an array to hand to dx-batch.
+ if CLLIST dp
+ 	rc = $getlist(cltlist[],2,CLLIST)
+ endif
+
+'See if any Prescripts and defined and call them in order
+ $clear(c)
  PostCount = $maxarray(PostScript[])
- do while c++ <= PostCount
- 	call PostScript[c]
+ $trace("off")
+ do while c++ < PostCount
+ 	call PostScript[c](parmfile,option,retcode,cltlist[])
  enddo
+$trace("on")
   
-  
+option = $parse(option,1,";" )
+$parsem(option,1,"`",option,xtranscount)
+footertxt = COMPCODE + "2A" + addfield($casti(xtranscount), "999999")
+
+'Open the batch file to add the footer
+ FileNum = $fileavail()
+ rc = $openfile(FileNum,SEQOUT,"E")
+ rc = $writefile(FileNum,footertxt)
+ rc = $closefile(FileNum,"C")
   
   (void)$unix(catjcl)
-  rc = $ftp(ftpcmd[], remote-sys, login-id, login-passwd, local-dir, remote-dir)
+if submitfile = "Y"
+  rc = $ftp(ftpcmd[], remote-sys, login-id, login-passwd, batchdir, remote-dir)
+else
+	rc = 0
+endif
   'If the ftp fails then it will return something other than zero
   'When that happens email MIS and the person who's running the script
    if rc > 0
-    badftp_body += ftperror
-	select rc
-	 case 1  badftp_body += ftperror1
-	 case 2  badftp_body += ftperror2
-	 case 3  badftp_body += ftperror3
-	 case 4  badftp_body += ftperror4
-	 case 5  badftp_body += ftperror5
-	 case 6  badftp_body += ftperror6
- 	 case 7  badftp_body += ftperror7
-	endselect   
-    rc = $email("mis@helenfarabee.org", badftp_sub, badftp_body)
-    rc = $dbread(03,$operstaffid,s.email)
-	rc = $email(s.email, badftp_sub, badftp_body)
-    '(void)$unix(remove)
+		if $maxarray(ITNotify[]) > 0
+      badftp_body += ftperror + ftpErrorRc[rc]
+  	  rc = $email(ITnotify[], badftp_sub, badftp_body)
+  	endif
    else
-    (void)$unix(rename)
-    (void)$unix(copy)
-    (void)$unix(remove)
+    (void)$unix(archive)
    endif
  'else TXFile was never created for some reason, F9'd script maybe
   else
@@ -242,46 +237,70 @@ if go = "Y" or go = "y"
    $disp(errmsg2,22,5,50,"H")
    $acpt() 
   endif
- endif
- 'run perl command to fix carriage returns
+
+ 'run perl command to fix carriage returns.  This is helpful if the tracefile is sent to the end user.
+ 'It fixes the file so that it will display properly in Notepad.  Most end users do not have
+ 'Boxer or UltraEdit
  (void)$unix(perl)
  'Stop tracing now
- '$trace("off")
- if s.email !dp
-  rc = $dbread(03,$operstaffid,s.email)
- endif
- cmd = "(cd " + batchdir + ";Echo CareBatch TraceFile;"
- cmd += "uuencode " + tracefile2 + " " + tracefile2 +  ") |mail -s 'CareBatch TraceFile' mis@helenfarabee.org " + s.email
- (void)$unix(cmd)
-else
- return
+
+'Combine the notify and IT notify array of email addresses to send everyone the success message.
+rc = $arrpush(notify[],ITnotify[])
+rc = $sortu(notify[])
+ 
+if $maxarray(notify[]) > 0
+	$clear(c)
+	do while c++ < $maxarray(notify[])
+    cmd = "(cd " + batchdir + ";Echo CareBatch TraceFile;"
+    cmd += "uuencode " + tracefile2 + " " + tracefile2 +  ") |mail -s 'CareBatch TraceFile' " + notify[c]
+    (void)$unix(cmd)
+  enddo
 endif
-end txbatch 
+
+$trace("off")
+
+end Batch_Wrap 
+
+%include inc_GetParm
+%include inc_GetOption
+
+function transcount(LegacyBatch) is i
+
+rc          is i
+itranscount is i
+transcount  is i
+LegacyBatch is x
+LastLine    is x
+cmd1				is x
+cmd2				is x
+tempfile    is x
+
+rc = $tempfile(tempfile)
+
+cmd1 = "tail -n 0 " + LegacyBatch
+cmd2 = "sed '$d' " + LegacyBatch + " > " + tempfile + " ; cp " + tempfile + " " + LegacyBatch
+
+rc = $unix(cmd1,LastLine)
+rc = rc
+rc = $unix(cmd2)
+rc = rc
+
+LastLine = $seg(LastLine,6,6)
+
+transcount = $casti(LastLine)
 
 
-function HolidayYN() is x
+end transcount
 
-Holiday				is x
-checkdt				is x
-checkln				is i
-holidays[]    is x
+dynamic function addfield(value, formatstr) is x
+value       is v
+formatstr   is x
 
-$clear(Holiday)
-checkdt = $castx($today)
+addfield = $formatf(value, formatstr)
 
-rc = $getparm(holidays[],"CAREDATE") 
+end addfield
 
-if rc = 0 
-	checkln = $find(checkdt,holidays[],1,"P")
-		if checkln > 0
-			$parsem(holidays[checkln],1,"|",,Holiday)
-			HolidayYN = "Y"
-		else
-			HolidayYN = "N"
-		endif
-else
-	HolidayYN = "N"
-endif 
 
-end HolidayYN
 
+
+ 
