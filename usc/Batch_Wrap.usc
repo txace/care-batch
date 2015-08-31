@@ -216,6 +216,12 @@ footertxt = COMPCODE + "2A" + addfield($casti(xtranscount), "999999")
  rc = $closefile(FileNum,"C")
   
   (void)$unix(catjcl)
+
+ftpcmd[1] = "as"
+ftpcmd[2] = "filetype=jes"
+ftpcmd[3] = "put " + SEQOUT
+ftpcmd[4] = "quit"
+
 if submitfile = "Y"
   rc = $ftp(ftpcmd[], remote-sys, login-id, login-passwd, batchdir, remote-dir)
 else
