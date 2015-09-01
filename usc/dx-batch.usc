@@ -3,13 +3,11 @@
 
 %define DEBUG_CLCOUNT 5
 
-%define CN_COMP "100"
 %define CN_ProdSys "/c0/MIS"
 %define CN_DefaultParm "CARECONT"
 %define CN_ICD10_DATE 10/1/2015
 %define CN_rec_type_dx 1
 %define CN_trans_code_dx 15
-%define CN_batch_num "T1"
 %define CN_aamd_vers "77"
 %define CN_trans_vers_dx "C"
 %define CN_dx_axis_vers "10"
@@ -36,14 +34,14 @@ start dx-batch(parmfile, option, regid[], retcode)
    DiagCount         is n           ' Diagnosis Record Counter
    LockReg[]         is x           ' Array of Locked Register Ids
    reg_limit         is b
-   care_userid       is x
+   USERID            is x
    trace_path        is x
 
    ' batch transaction variables
    start_id          is x
    icd10_date        is d
-   comp_code         is i
-   batch_num         is x
+   COMPCODE          is i
+   BATHNO            is x
    trans_date        is d
 
    rec_type_dx       is i
@@ -247,17 +245,17 @@ ICD10:
    'line 1
    phys_rec_num = 1
 
-   outrec += addfield(comp_code, "999")
+   outrec += addfield(COMPCODE, "999")
    outrec += addfield(rec_type_dx, "9")
    outrec += addfield(trans_code_dx, "99")
    outrec += addfield(trans_vers_dx, "~")
    outrec += addfield(Transcount, "999999")
    outrec += addfield(phys_rec_num, "99")
-   outrec += addfield(batch_num, "~~")
+   outrec += addfield(BATHNO, "~~")
    outrec += addfield(trans_date, "YYYYMMDD")
    outrec += addfield(care_userid, "~~~~~")
    outrec += addfield(client-id, "~~~~~~~~~~")
-   outrec += addfield(client_careid, "~~~~~~~~~~")
+   outrec += addfield(USERID, "~~~~~")
    outrec += addfield(client_last, "~~~~~~~~~~~~~~~~")
    outrec += addfield(client_sufx, "~~~")
    outrec += addfield(client_first, "~~~~~~~~~~~")
@@ -269,7 +267,7 @@ ICD10:
    phys_rec_num++
    outrec = ""
 
-   outrec += addfield(comp_code, "999")
+   outrec += addfield(COMPCODE, "999")
    outrec += addfield(rec_type_dx, "9")
    outrec += addfield(trans_code_dx, "99")
    outrec += addfield(trans_vers_dx, "~")
@@ -294,7 +292,7 @@ ICD10:
    phys_rec_num++
    outrec = ""
 
-   outrec += addfield(comp_code, "999")
+   outrec += addfield(COMPCODE, "999")
    outrec += addfield(rec_type_dx, "9")
    outrec += addfield(trans_code_dx, "99")
    outrec += addfield(trans_vers_dx, "~")
@@ -327,7 +325,7 @@ ICD10:
    phys_rec_num++
    outrec = ""
 
-   outrec += addfield(comp_code, "999")
+   outrec += addfield(COMPCODE, "999")
    outrec += addfield(rec_type_dx, "9")
    outrec += addfield(trans_code_dx, "99")
    outrec += addfield(trans_vers_dx, "~")
@@ -411,7 +409,7 @@ ICD10:
    phys_rec_num++
    outrec = ""
 
-   outrec += addfield(comp_code, "999")
+   outrec += addfield(COMPCODE, "999")
    outrec += addfield(rec_type_dx, "9")
    outrec += addfield(trans_code_dx, "99")
    outrec += addfield(trans_vers_dx, "~")
@@ -442,12 +440,9 @@ _init:
    endif
 
    'set defaults
-   'do not default the component code
-   'comp_code = $casti(CN_COMP)
    icd10_date = CN_icd10_date
    rec_type_dx = CN_rec_type_dx '1
    trans_code_dx = CN_trans_code_dx '15
-   batch_num = CN_batch_num '"T1"
    trans_date = $today
 
    dx_aamd_vers = CN_aamd_vers '"77"
@@ -471,12 +466,12 @@ _init:
       $trace("path,on", trace_path)
    endif
 
-   if comp_code !dp then
+   if COMPCODE !dp then
       $errmsg1 = "Component Code Not Defined"
       return
    endif
 
-   if care_userid !dp then
+   if USERID !dp then
       $errmsg1 = "Care User Not Defined"
       return
    endif
