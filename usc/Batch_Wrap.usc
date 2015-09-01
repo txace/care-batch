@@ -103,15 +103,13 @@ login-id      is x
 login-passwd  is x
 remote-dir    is x
 
+getParm(parmfile)
+getOption(option)
+
 'Turn on our tracefile if indicated by DP in the parmfile
 if tracefile dp
 	$trace("path.on", tracefile)
 endif
-
-$trace("off")
-getParm(parmfile)
-getOption(option)
-$trace("on")
 
 'Check if our TXFile is still in the carebatch directory, we don't want to accidetly over write a batch file that has not been
 'submitted and subsequently archived.
