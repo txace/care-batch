@@ -15,10 +15,11 @@
 %define CN_dx_axis_vers "10"
 %define CN_dx_ax3_vers "10"
 
-start dx-batch(parmfile, option, retcode)
+start dx-batch(parmfile, option, regid[], retcode)
    '********* SCRIPT ARGUMENTS *************
    parmfile          is x
    option            is x     ' Parameters for script behavior (Separated by semicolon)
+   regid[]           is x
                               ' Valid Options :
    retcode           is b     ' Returned code for script execution (non-zero indicates error)
    '********* SCRIPT VARIABLES *************
@@ -175,7 +176,11 @@ _main:
          gosub ICD10
       endif
 
-      retcode1 = $dbreadnext(02, client-id, c.reg.sub, c.ln, c.fn, c.mn, c.suffix, c.careid)
+      elseif regid[] dp then
+         client-id = regid[ClCount]
+         retcode1 = $dbread(02, client-id, c.reg.sub, c.ln, c.fn, c.mn, c.suffix, c.careid)
+      else
+         retcode1 = $dbreadnext(02, client-id, c.reg.sub, c.ln, c.fn, c.mn, c.suffix, c.careid)
       if ClCount > reg_limit and reg_limit != 0 then
          retcode1 = 99
       endif
@@ -484,6 +489,11 @@ _init:
    $setvarname(c.suffix, map_c.suffix)
    $setvarname(c.careid, map_c.careid)
    $setvarname(c.reg.sub, map_c.reg.sub)
+
+   if regid[] dp then
+      reg_limit = $maxarray(regid[])
+      start_id = regid[1]
+   endif
 
    if $loadlib(lib-dx, dx_library) > 0 then
       'you must specify and load a library that implements the DX-interface
