@@ -226,14 +226,14 @@ ICD10:
    lib-dx:sortDxByV4Axis(dx_code[], dx_rank[], dx_axis[], stripdots, axis1[], axis2[], axis3[])
 
    'get the reset of the dx values
-   lib-dx:getClientAxis4(client-id, $today, dx_rec, dx_date, 
+   lib-dx:getClientAxis4(client-id, $today, dx_rec, , 
       dx_4_a, dx_4_b, dx_4_c, dx_4_d, dx_4_e, dx_4_f, dx_4_g, dx_4_h, dx_4_i, dx_4_j)
    
-   lib-dx:getClientGaf(client-id, $today, dx_rec, dx_date, dx_gaf_cur, dx_gaf_pre, dx_abl_cur, dx_abl_pot)
-   lib-dx:getClientAamd(client-id, $today, dx_rec, dx_date, dx_aamd_date, dx_aamd_1, dx_aamd_2, dx_aamd_3, 
+   lib-dx:getClientGaf(client-id, $today, dx_rec, , dx_gaf_cur, dx_gaf_pre, dx_abl_cur, dx_abl_pot)
+   lib-dx:getClientAamd(client-id, $today, dx_rec, , dx_aamd_date, dx_aamd_1, dx_aamd_2, dx_aamd_3, 
       dx_aamd_gen, dx_aamd_anom, dx_aamd_sens, dx_aamd_prec, dx_aamd_conv, dx_aamd_phys, dx_aamd_moto, 
       dx_aamd_mloc, dx_aamd_msev)
-   lib-dx:getClientIq(client-id, $today, dx_rec, dx_date, dx_iq, dx_iq_test, dx_iq_date, dx_sq, dx_sq_test, dx_sq_date)
+   lib-dx:getClientIq(client-id, $today, dx_rec, , dx_iq, dx_iq_test, dx_iq_date, dx_sq, dx_sq_test, dx_sq_date)
 
    'update batch stats
    DiagCount++
