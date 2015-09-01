@@ -29,7 +29,7 @@ footertxt  is x              'Text String for footer record
 FileNum		 is b							 'File Handle for adding footer record
 CLLIST		 is x							 'Saved List ID fromt he parm file.  
 cltList[]  is x							 'Client List Array from to be handed to dx-batch if CLIST is dp
-xtranscount is x
+transcount is i
 holidays[] is x
 ITnotify[] is x
 notify[]   is x
@@ -89,6 +89,7 @@ c							is i
 Postscript[]   is x
 PostCount      is i
 remove_footer  is x
+prog_type      is x
 
 'TXBATCH Parameters
 prog					is x  prog = "TXBATCH5"
@@ -100,12 +101,15 @@ ln            is i
 temppath      is x
 list[]        is x
 ftpcmd[]      is x
+care_id       is x
+care_pass     is x
 login-id      is x
 login-passwd  is x
 remote-dir    is x
 
 'set defaults
 remove_footer = "Y"
+prog_type = "MIS"
 
 getParm(parmfile)
 getOption(option)
@@ -119,52 +123,72 @@ endif
 'submitted and subsequently archived.
 rc3 = $checkfile(SEQOUT)
 if rc3 < 1
- $disp(errmsg,17,5,80,"H")
- $acpt()
+ if $operioallow = "Y" then
+   $disp(errmsg,17,5,80,"H")
+   $acpt()
+ endif
  return
 endif
 
 'Check for Batch Holiday.  If yes, display message and stop processing
 rc = $find($today,holidays[],1,"F")
 if rc > 0
+ if $operioallow = "Y" then
 	$disp("STOP - Batch Holiday ",17,5,21) 
 	$disp(Holiday,17,26,22,"H")
 	$disp("Press Any key to Cancel", 19,10)
 	$acpt()
+ endif
 	return
 endif
 
 'Now on to processing the batch
 
 'Test for the FTP User ID and Password and make sure they are valid by doing a quick FTP command.
-$disp(`"Version: " + $scriptver`,2,65,15,"H")
-$disp("Please enter Care User ID: ",17,5,32,"H")
-$acpt(login-id,17,35,8)
-$disp("Please enter Care Password: ",18,5,33,"H")
-$acpt(login-passwd,18,35,8)
-$disp("Complete Process?  (Y/N)",20,5,30,"H")
-$acpt(go,20,33,1)
-if go = "Y" or go = "y"
- if login-id !dp or login-passwd !dp
-  $erasewin(0)
-  $disp("NO USERNAME OR PASSWORD ENTERED!!! ",17,5,32,"H")
-  $acpt()
-  return
- endif
- 'Check if the username/password is still good
- $disp("Testing Password/Username",22,10,30,"H")
- if submitfile = "Y"
- 	ftp = $ftp(ftpcmd[4], remote-sys, login-id, login-passwd, batchdir, remote-dir)  
- else
- 	ftp = 0
- endif
- if ftp = 1
-  $erasewin(0)
-  $disp("BAD USERNAME OR PASSWORD ENTERED!!! ",17,5,32,"H")
-  $acpt()
-  return 
- endif 
+if $operioallow = "Y" then
+   $disp(`"Version: " + $scriptver`,2,65,15,"H")
+   $disp("Please enter Care User ID: ",17,5,32,"H")
+   $acpt(care_id,17,35,8)
+   $disp("Please enter Care Password: ",18,5,33,"H")
+   $acpt(care_pass,18,35,8)
+   $disp("Complete Process?  (Y/N)",20,5,30,"H")
+   $acpt(go,20,33,1)
+   if go != "Y" and go != "y" then
+      return
+   endif
 endif
+
+login-id = care_id
+login-passwd = care_pass
+
+if login-id !dp or login-passwd !dp then
+   if $operioallow = "Y" then
+      $erasewin(0)
+      $disp("NO USERNAME OR PASSWORD ENTERED!!! ",17,5,32,"H")
+      $acpt()
+   endif
+   return
+endif
+
+if $operioallow = "Y" then
+   'Check if the username/password is still good
+   $disp("Testing Password/Username",22,10,30,"H")
+endif
+
+if submitfile = "Y"
+   ftp = $ftp(ftpcmd[4], remote-sys, login-id, login-passwd, batchdir, remote-dir)  
+else
+   ftp = 0
+endif
+
+if ftp = 1
+   if $operioallow = "Y" then
+      $erasewin(0)
+      $disp("BAD USERNAME OR PASSWORD ENTERED!!! ",17,5,32,"H")
+      $acpt()
+   endif
+   return 
+endif 
  
 'See if a list ID was defined in the parfile.  If yes, put that client list into an array to hand to dx-batch.
  if CLLIST dp
@@ -186,10 +210,19 @@ endif
     rc = $putlist(cltlist[], 2, CLLIST, ,"R")
  endif
 
-  rc4 = $misprog(prog,parmfile)
+  select Prog_type
+   case "MIS"
+      rc4 = $misprog(prog,parmfile)
+   case "USC"
+      call prog (parmfile, option, cltlist[], rc4)
+  endselect
+
   rc5 = $checkfile(SEQOUT)
 
   if rc5 > 0 then
+     $erasewin(0)
+     $disp(errmsg2,22,5,50,"H")
+     $acpt() 
      return
   endif
 
@@ -226,40 +259,35 @@ ftpcmd[3] = "put " + SEQOUT
 ftpcmd[4] = "quit"
 
 if submitfile = "Y"
-  rc = $ftp(ftpcmd[], remote-sys, login-id, login-passwd, batchdir, remote-dir)
+   rc = $ftp(ftpcmd[], remote-sys, login-id, login-passwd, batchdir, remote-dir)
 else
-	rc = 0
+   rc = 0
 endif
-  'If the ftp fails then it will return something other than zero
-  'When that happens email MIS and the person who's running the script
-   if rc > 0
-		if $maxarray(ITNotify[]) > 0
+
+'If the ftp fails then it will return something other than zero
+'When that happens email MIS and the person who's running the script
+if rc > 0
+   if $maxarray(ITNotify[]) > 0 then
       badftp_body += ftperror + ftpErrorRc[rc]
-  	  rc = $email(ITnotify[], badftp_sub, badftp_body)
-  	endif
-   else
-    (void)$unix(archive)
+      rc = $email(ITnotify[], badftp_sub, badftp_body)
    endif
- 'else TXFile was never created for some reason, F9'd script maybe
-  else
-   $erasewin(0)
-   $disp(errmsg2,22,5,50,"H")
-   $acpt() 
-  endif
+   return
+endif
+
+(void)$unix(archive)
 
  'run perl command to fix carriage returns.  This is helpful if the tracefile is sent to the end user.
  'It fixes the file so that it will display properly in Notepad.  Most end users do not have
  'Boxer or UltraEdit
  (void)$unix(perl)
- 'Stop tracing now
 
 'Combine the notify and IT notify array of email addresses to send everyone the success message.
 rc = $arrpush(notify[],ITnotify[])
 rc = $sortu(notify[])
  
 if $maxarray(notify[]) > 0
-	$clear(c)
-	do while c++ < $maxarray(notify[])
+  c = 0
+  do while c++ < $maxarray(notify[])
     cmd = "(cd " + batchdir + ";Echo CareBatch TraceFile;"
     cmd += "uuencode " + tracefile2 + " " + tracefile2 +  ") |mail -s 'CareBatch TraceFile' " + notify[c]
     (void)$unix(cmd)
@@ -312,8 +340,9 @@ dynamic function put-footer(comp-code, trans-count, batch-file) is i
 comp-code   is x
 trans-count is i
 batch-file  is x
+cmd         is x
 
-cmd = "echo " + x"22" + COMPCODE + "2A" + $formatf(trans-count, "999999") + x"22" + " >> " + batch-file
+cmd = "echo " + x"22" + COMP-CODE + "2A" + $formatf(trans-count, "999999") + x"22" + " >> " + batch-file
 put-footer = $unix(cmd)
 
 end put-footer
