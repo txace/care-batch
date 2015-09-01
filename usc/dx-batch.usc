@@ -278,11 +278,12 @@ ICD10:
    outrec += addfield(dx_time, "HHMM")
    outrec += addfield(dx_reason, "~")
    outrec += addfield(dx_primary, "~")
-   max_record = 5
    this_rec = 0
-   do while this_rec++ < max_record
-      outrec += addfield(axis1[this_rec], "~~~~~~~")
-   enddo
+   outrec += addfield(axis1[++this_rec], "~~~~~~~")
+   outrec += addfield(axis1[++this_rec], "~~~~~~~")
+   outrec += addfield(axis1[++this_rec], "~~~~~~~")
+   outrec += addfield(axis1[++this_rec], "~~~~~~~")
+   outrec += addfield(axis1[++this_rec], "~~~~~~~")
 
 
    outrec = StrPad(outrec, 80, " ")
@@ -299,16 +300,14 @@ ICD10:
    outrec += addfield(Transcount, "999999")
    outrec += addfield(phys_rec_num, "99")
    'finish off the record we started in the last physical record
-   max_record = 6
-   'this_rec = 0
-   do while this_rec++ < max_record
-      outrec += addfield(axis1[this_rec], "~~~~~~~")
-   enddo
-   max_record = 4
+   outrec += addfield(axis1[++this_rec], "~~~~~~~")
+
    this_rec = 0
-   do while this_rec++ < max_record
-      outrec += addfield(axis2[this_rec], "~~~~~~~")
-   enddo
+   outrec += addfield(axis2[++this_rec], "~~~~~~~")
+   outrec += addfield(axis2[++this_rec], "~~~~~~~")
+   outrec += addfield(axis2[++this_rec], "~~~~~~~")
+   outrec += addfield(axis2[++this_rec], "~~~~~~~")
+
    outrec += addfield("", "~~~~~~~~~~~~~~~")                'filler
    outrec += addfield(dx_abl_cur, "~")
    outrec += addfield(dx_abl_pot, "~")
@@ -415,11 +414,14 @@ ICD10:
    outrec += addfield(trans_vers_dx, "~")
    outrec += addfield(Transcount, "999999")
    outrec += addfield(phys_rec_num, "99")
-   max_record = 6
    this_rec = 0
-   do while this_rec++ < max_record
-      outrec += addfield(axis3[this_rec], "~~~~~~~")
-   enddo
+   outrec += addfield(axis3[++this_rec], "~~~~~~~")
+   outrec += addfield(axis3[++this_rec], "~~~~~~~")
+   outrec += addfield(axis3[++this_rec], "~~~~~~~")
+   outrec += addfield(axis3[++this_rec], "~~~~~~~")
+   outrec += addfield(axis3[++this_rec], "~~~~~~~")
+   outrec += addfield(axis3[++this_rec], "~~~~~~~")
+
    outrec += addfield(dx_date, "YYYYMMDD")
 
    outrec = StrPad(outrec, 80, " ")
