@@ -162,16 +162,25 @@ if go = "Y" or go = "y"
  endif 
 endif
  
+'See if a list ID was defined in the parfile.  If yes, put that client list into an array to hand to dx-batch.
+ if CLLIST dp
+ 	rc = $getlist(cltlist[],2,CLLIST)
+ endif
+
  'See if any Prescripts and defined and call them in order
  $disp("Running Pre-Processing Scripts",22,10,30,"H")
- $clear(c)
+ c = 0
  PreCount = $maxarray(PreScript[])
+ $trace("off")
  do while c++ < PreCount
- 	$trace("off")
- 	call PreScript[c](parmfile,option,retcode)
-  $trace("on") 
+  call PreScript[c](parmfile,option,cltlist[],retcode)
  enddo
+ $trace("on") 
 
+ 'update the CLLIST with anything the PreScripts might have changed
+ if CLLIST dp then
+    rc = $putlist(cltlist[], 2, CLLIST, ,"R")
+ endif
 
   rc4 = $misprog(prog,parmfile)
   rc5 = $checkfile(SEQOUT)
@@ -185,19 +194,15 @@ endif
 	option += "transcount`" + $castx(transcount) + ";"
 	option += ";batchfilename`" + SEQOUT + ";"
 
-'See if a list ID was defined in the parfile.  If yes, put that client list into an array to hand to dx-batch.
- if CLLIST dp
- 	rc = $getlist(cltlist[],2,CLLIST)
- endif
 
 'See if any Prescripts and defined and call them in order
- $clear(c)
+ c = 0
  PostCount = $maxarray(PostScript[])
  $trace("off")
  do while c++ < PostCount
- 	call PostScript[c](parmfile,option,retcode,cltlist[])
+ 	call PostScript[c](parmfile,option,cltlist[],retcode)
  enddo
-$trace("on")
+ $trace("on")
   
 option = $parse(option,1,";" )
 $parsem(option,1,"`",option,xtranscount)
