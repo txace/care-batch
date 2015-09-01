@@ -10,8 +10,10 @@
 %define CN_trans_code_dx 15
 %define CN_aamd_vers "77"
 %define CN_trans_vers_dx "C"
-%define CN_dx_axis_vers "10"
-%define CN_dx_ax3_vers "10"
+%define CN_axis_ver_9 "04"
+%define CN_axis3_ver_9 "09"
+%define CN_axis_ver_10 "10"
+%define CN_axis3_ver_10 "10"
 
 start dx-batch(parmfile, option, regid[], retcode)
    '********* SCRIPT ARGUMENTS *************
@@ -220,8 +222,12 @@ ICD10:
    stripdots = "TRUE"
    if $today < icd10_date then
       dx_code[] = dx09_code[]
+      dx_axis_vers = CN_axis_ver_9
+      dx_axis3_vers = CN_axis3_ver_9
    else 
       dx_code[] = dx10_code[]
+      dx_axis_vers = CN_axis_ver_10 
+      dx_axis3_vers = CN_axis3_ver_10
    endif
    lib-dx:sortDxByV4Axis(dx_code[], dx_rank[], dx_axis[], stripdots, axis1[], axis2[], axis3[])
 
@@ -449,8 +455,6 @@ _init:
 
    dx_aamd_vers = CN_aamd_vers '"77"
    trans_vers_dx = CN_trans_vers_dx '"C"
-   dx_axis_vers = CN_dx_axis_vers '"10"
-   dx_ax3_vers  = CN_dx_ax3_vers '"10"
 
    BatchFilename  = "/c0/carebatch/tempbatch"   ' Define File Name and Path
 
