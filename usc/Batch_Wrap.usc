@@ -201,7 +201,7 @@ endif
  PostCount = $maxarray(PostScript[])
  $trace("off")
  do while c++ < PostCount
- 	call PostScript[c](parmfile,option,retcode,cltlist[])
+ 	call PostScript[c](parmfile,option,cltlist[],retcode)
  enddo
 $trace("on")
   
