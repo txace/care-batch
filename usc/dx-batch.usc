@@ -43,7 +43,7 @@ start dx-batch(parmfile, option, regid[], retcode)
    start_id          is x
    icd10_date        is d
    COMPCODE          is i
-   BATHNO            is x
+   BATCHNO           is x
    trans_date        is d
 
    rec_type_dx       is i
@@ -119,7 +119,7 @@ start dx-batch(parmfile, option, regid[], retcode)
    dx_sq_date        is d
    dx_aamd_vers      is x
    dx_axis_vers      is x
-   dx_ax3_vers       is x
+   dx_axis3_vers     is x
    dx_gaf_cur        is x
    dx_gaf_pre        is x
    dx_4_a            is x
@@ -176,11 +176,12 @@ _main:
          gosub ICD10
       endif
 
-      elseif regid[] dp then
+      if regid[] dp then
          client-id = regid[ClCount]
          retcode1 = $dbread(02, client-id, c.reg.sub, c.ln, c.fn, c.mn, c.suffix, c.careid)
       else
          retcode1 = $dbreadnext(02, client-id, c.reg.sub, c.ln, c.fn, c.mn, c.suffix, c.careid)
+      endif
       if ClCount > reg_limit and reg_limit != 0 then
          retcode1 = 99
       endif
@@ -257,11 +258,11 @@ ICD10:
    outrec += addfield(trans_vers_dx, "~")
    outrec += addfield(Transcount, "999999")
    outrec += addfield(phys_rec_num, "99")
-   outrec += addfield(BATHNO, "~~")
+   outrec += addfield(BATCHNO, "~~")
    outrec += addfield(trans_date, "YYYYMMDD")
-   outrec += addfield(care_userid, "~~~~~")
-   outrec += addfield(client-id, "~~~~~~~~~~")
    outrec += addfield(USERID, "~~~~~")
+   outrec += addfield(client-id, "~~~~~~~~~~")
+   outrec += addfield(client_careid, "~~~~~~~~~~")
    outrec += addfield(client_last, "~~~~~~~~~~~~~~~~")
    outrec += addfield(client_sufx, "~~~")
    outrec += addfield(client_first, "~~~~~~~~~~~")
@@ -352,7 +353,7 @@ ICD10:
    outrec += addfield(dx_sq_date, "YYYYMMDD")
    outrec += addfield(dx_aamd_vers, "~~")
    outrec += addfield(dx_axis_vers, "~~")
-   outrec += addfield(dx_ax3_vers, "~~")
+   outrec += addfield(dx_axis3_vers, "~~")
    outrec += addfield(dx_gaf_cur, "~~")
    outrec += addfield(dx_gaf_pre, "~~")
    if dx_4_j dp then
