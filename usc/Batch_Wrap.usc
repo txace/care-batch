@@ -88,6 +88,7 @@ PreCount      is i
 c							is i
 Postscript[]   is x
 PostCount      is i
+remove_footer  is x
 
 'TXBATCH Parameters
 prog					is x  prog = "TXBATCH5"
@@ -102,6 +103,9 @@ ftpcmd[]      is x
 login-id      is x
 login-passwd  is x
 remote-dir    is x
+
+'set defaults
+remove_footer = "Y"
 
 getParm(parmfile)
 getOption(option)
@@ -185,14 +189,19 @@ endif
   rc4 = $misprog(prog,parmfile)
   rc5 = $checkfile(SEQOUT)
 
-  'Ok, if our program ran fine then do our unix commands and ftp our file
-  if rc5 = 0
+  if rc5 > 0 then
+     return
+  endif
+
   (void)$unix(fold)
 
-	transcount(seqout)  'This functions gets the transaction count from the file and removes the footer record
+   if remove_footer = "Y" then
+      remove-footer(seqout) 'this function removes the footer record
+   endif
+   transcount = get-transcount(seqout)  'This functions gets the transaction count from the file 
 	
-	option += "transcount`" + $castx(transcount) + ";"
-	option += ";batchfilename`" + SEQOUT + ";"
+   option += "transcount`" + $castx(transcount) + ";"
+   option += ";batchfilename`" + SEQOUT + ";"
 
 
 'See if any Prescripts and defined and call them in order
@@ -204,17 +213,12 @@ endif
  enddo
  $trace("on")
   
-option = $parse(option,1,";" )
-$parsem(option,1,"`",option,xtranscount)
-footertxt = COMPCODE + "2A" + addfield($casti(xtranscount), "999999")
+ 'reparse the option to get updates from post-scripts
+ getoption(option)
 
-'Open the batch file to add the footer
- FileNum = $fileavail()
- rc = $openfile(FileNum,SEQOUT,"E")
- rc = $writefile(FileNum,footertxt)
- rc = $closefile(FileNum,"C")
-  
-  (void)$unix(catjcl)
+ put-footer(compcode, transcount, seqout) 'add back the footer with the new transcount
+
+ (void)$unix(catjcl)
 
 ftpcmd[1] = "as"
 ftpcmd[2] = "filetype=jes"
@@ -269,43 +273,47 @@ end Batch_Wrap
 %include inc_GetParm
 %include inc_GetOption
 
-function transcount(LegacyBatch) is i
+function get-transcount(Legacy-Batch) is i
+
+legacy-batch is x
 
 rc          is i
-itranscount is i
-transcount  is i
-LegacyBatch is x
 LastLine    is x
-cmd1				is x
-cmd2				is x
-tempfile    is x
+cmd        is x
+
+
+cmd = "tail -n 1 " + Legacy-Batch
+
+rc = $unix(cmd,LastLine)
+
+LastLine = $seg(LastLine,8,6)
+
+get-transcount = $casti(LastLine)
+
+end get-transcount
+
+dynamic function remove-footer(legacy-batch) is i
+
+legacy-batch   is x
+cmd            is x
+
+rc             is b
+tempfile       is x
 
 rc = $tempfile(tempfile)
 
-cmd1 = "tail -n 0 " + LegacyBatch
-cmd2 = "sed '$d' " + LegacyBatch + " > " + tempfile + " ; cp " + tempfile + " " + LegacyBatch
+cmd = "sed '$d' " + Legacy-Batch + " > " + tempfile + " ; cp " + tempfile + " " + Legacy-Batch
 
-rc = $unix(cmd1,LastLine)
-rc = rc
-rc = $unix(cmd2)
-rc = rc
+remove-footer = $unix(cmd)
 
-LastLine = $seg(LastLine,6,6)
+end remove-footer
 
-transcount = $casti(LastLine)
+dynamic function put-footer(comp-code, trans-count, batch-file) is i
+comp-code   is x
+trans-count is i
+batch-file  is x
 
+cmd = "echo " + x"22" + COMPCODE + "2A" + $formatf(trans-count, "999999") + x"22" + " >> " + batch-file
+put-footer = $unix(cmd)
 
-end transcount
-
-dynamic function addfield(value, formatstr) is x
-value       is v
-formatstr   is x
-
-addfield = $formatf(value, formatstr)
-
-end addfield
-
-
-
-
- 
+end put-footer
