@@ -33,6 +33,7 @@ transcount is i
 holidays[] is x
 ITnotify[] is x
 notify[]   is x
+allowoverwrite is x
 
 'Misc
 go            is x
@@ -110,6 +111,7 @@ remote-dir    is x
 'set defaults
 remove_footer = "Y"
 prog_type = "MIS"
+allowoverwrite = "N"
 
 getParm(parmfile)
 getOption(option)
@@ -122,7 +124,7 @@ endif
 'Check if our TXFile is still in the carebatch directory, we don't want to accidetly over write a batch file that has not been
 'submitted and subsequently archived.
 rc3 = $checkfile(SEQOUT)
-if rc3 < 1
+if rc3 < 1 and allowoverwrite != "Y" then
  if $operioallow = "Y" then
    $disp(errmsg,17,5,80,"H")
    $acpt()
@@ -316,7 +318,7 @@ rc = $unix(cmd,LastLine)
 
 LastLine = $seg(LastLine,8,6)
 
-get-transcount = $casti(LastLine)
+get-transcount = $casti(LastLine) + 1
 
 end get-transcount
 
