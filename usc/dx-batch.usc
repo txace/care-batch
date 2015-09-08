@@ -5,15 +5,6 @@
 
 %define CN_ProdSys "/c0/MIS"
 %define CN_DefaultParm "CARECONT"
-%define CN_ICD10_DATE 10/1/2015
-%define CN_rec_type_dx 1
-%define CN_trans_code_dx 15
-%define CN_aamd_vers "77"
-%define CN_trans_vers_dx "C"
-%define CN_axis_ver_9 "04"
-%define CN_axis3_ver_9 "09"
-%define CN_axis_ver_10 "10"
-%define CN_axis3_ver_10 "10"
 
 start dx-batch(parmfile, option, regid[], retcode)
    '********* SCRIPT ARGUMENTS *************
@@ -24,12 +15,8 @@ start dx-batch(parmfile, option, regid[], retcode)
    retcode           is b     ' Returned code for script execution (non-zero indicates error)
    '********* SCRIPT VARIABLES *************
    win               is b           ' User interface window variable
-   i                 is i           ' Index Variable
    lock-idx          is i
-   retcode1          is b
    OK                is x           ' User Input Variable (Y/N)
-   oneyear           is d           ' Test Value ( Today - 365 days )
-   ClDiagnosed       is x           ' Y/N Flag indicating if client diagnosis submitted
    client-id         is x           ' Client ID variable
    ClCount           is n           ' Client Counter
    TransCount        is n           ' Transaction Counter
@@ -38,21 +25,15 @@ start dx-batch(parmfile, option, regid[], retcode)
    reg_limit         is b
    USERID            is x
    trace_path        is x
+   skipoperio        is x
 
    ' batch transaction variables
    start_id          is x
-   icd10_date        is d
    COMPCODE          is i
    BATCHNO           is x
    trans_date        is d
 
-   rec_type_dx       is i
-   trans_code_dx     is i
-   trans_vers_dx     is x
    phys_rec_num      is i
-
-   this_rec          is i
-   max_record        is i
 
    '********* Batch output VARIABLES *************
    BatchFile         is b           ' CARE Batch File Handle Number
@@ -83,59 +64,6 @@ start dx-batch(parmfile, option, regid[], retcode)
    lib-dx            is b
 
    dx_rec            is uid
-   dx_date           is d
-   dx_care_date      is d
-   dx_time           is t
-   dx_reason         is x
-   dx_primary        is x
-   dx_code[]         is x
-   dx10_code[]       is x
-   dx09_code[]       is x
-   dx_rank           is x
-   dx_axis[]         is x
-   axis1[]           is x
-   axis2[]           is x
-   axis3[]           is x
-   dx_abl_cur        is x
-   dx_abl_pot        is x
-   dx_aamd_1         is x
-   dx_aamd_2         is x
-   dx_aamd_3         is x
-   dx_aamd_gen       is x
-   dx_aamd_anom      is x
-   dx_aamd_sens      is x
-   dx_aamd_prec      is x
-   dx_aamd_conv      is x
-   dx_aamd_phys      is x
-   dx_aamd_moto      is x
-   dx_aamd_mloc      is x
-   dx_aamd_msev      is x
-   dx_aamd_date      is d
-   dx_iq             is i
-   dx_iq_test        is i
-   dx_iq_date        is d
-   dx_sq             is i
-   dx_sq_test        is i
-   dx_sq_date        is d
-   dx_aamd_vers      is x
-   dx_axis_vers      is x
-   dx_axis3_vers     is x
-   dx_gaf_cur        is x
-   dx_gaf_pre        is x
-   dx_4_a            is x
-   dx_4_b            is x
-   dx_4_c            is x
-   dx_4_d            is x
-   dx_4_e            is x
-   dx_4_f            is x
-   dx_4_g            is x
-   dx_4_h            is x
-   dx_4_i            is x
-   dx_4_j            is x
-
-   stripdots         is x
-
-   fscount           is b
 
    rc                is b
    T                 is x
@@ -152,9 +80,9 @@ _main:
    client-id = start_id 
 
    (void) $dbstart(02, client-id)              ' Get the first real ID in DB
-   retcode1 = $dbread(02, client-id, c.reg.sub, c.ln, c.fn, c.mn, c.suffix, c.careid)
+   retcode = $dbread(02, client-id, c.reg.sub, c.ln, c.fn, c.mn, c.suffix, c.careid)
 
-   do while (retcode1 < 3 or retcode = 4)
+   do while (retcode < 3 or retcode = 4)
 
       ClCount++
 
@@ -178,14 +106,17 @@ _main:
 
       if regid[] dp then
          client-id = regid[ClCount]
-         retcode1 = $dbread(02, client-id, c.reg.sub, c.ln, c.fn, c.mn, c.suffix, c.careid)
+         retcode = $dbread(02, client-id, c.reg.sub, c.ln, c.fn, c.mn, c.suffix, c.careid)
       else
-         retcode1 = $dbreadnext(02, client-id, c.reg.sub, c.ln, c.fn, c.mn, c.suffix, c.careid)
+         retcode = $dbreadnext(02, client-id, c.reg.sub, c.ln, c.fn, c.mn, c.suffix, c.careid)
       endif
       if ClCount > reg_limit and reg_limit != 0 then
-         retcode1 = 99
+         retcode = 99
       endif
    enddo
+
+   'remove the leading transcount
+   Transcount -= 1
 
    'rebuild the option string for output
    option = $varname(Transcount) + "`" + Transcount + ";"
@@ -199,9 +130,6 @@ _main:
 goback
 
 ICD10:
-   'get the earliest unbatched dx record
-   retcode = lib-dx:getUnbatchCltDx(client-id, $today, dx_rec, dx_date, dx_time, dx_primary, dx_reason, 
-      dx10_code[], dx_rank[], dx_axis[], dx09_code[])
 
    'bail if the client register is locked
    if retcode = 4 then
@@ -209,233 +137,20 @@ ICD10:
       goback
    endif
 
-   'bail if we don't have an unbatched dx record
-   if dx_rec !dp then
-      goback
-   endif
+   outrec = lib-dx:getDxBatchTrans(dx_rec, $today, COMPCODE, BATCHNO, $today, transcount, USERID, 
+      client-id, client_careid, client_last, client_sufx, client_first, client_middle)
 
-   'unsubmitted records a year or older cannot be submitted
-   if dx_date <= oneyear then
-      goback
-   endif 
+   if outrec dp then
 
-   'sort the codes
-   stripdots = "TRUE"
-   if $today < icd10_date then
-      dx_code[] = dx09_code[]
-      dx_axis_vers = CN_axis_ver_9
-      dx_axis3_vers = CN_axis3_ver_9
-   else 
-      dx_code[] = dx10_code[]
-      dx_axis_vers = CN_axis_ver_10 
-      dx_axis3_vers = CN_axis3_ver_10
-   endif
-   lib-dx:sortDxByV4Axis(dx_code[], dx_rank[], dx_axis[], stripdots, axis1[], axis2[], axis3[])
+      DiagCount++
+      'lead' the transcount for the next record
+      Transcount++
 
-   'get the reset of the dx values
-   lib-dx:getClientAxis4(client-id, $today, dx_rec, , 
-      dx_4_a, dx_4_b, dx_4_c, dx_4_d, dx_4_e, dx_4_f, dx_4_g, dx_4_h, dx_4_i, dx_4_j)
-   
-   lib-dx:getClientGaf(client-id, $today, dx_rec, , dx_gaf_cur, dx_gaf_pre, dx_abl_cur, dx_abl_pot)
-   lib-dx:getClientAamd(client-id, $today, dx_rec, , dx_aamd_date, dx_aamd_1, dx_aamd_2, dx_aamd_3, 
-      dx_aamd_gen, dx_aamd_anom, dx_aamd_sens, dx_aamd_prec, dx_aamd_conv, dx_aamd_phys, dx_aamd_moto, 
-      dx_aamd_mloc, dx_aamd_msev)
-   lib-dx:getClientIq(client-id, $today, dx_rec, , dx_iq, dx_iq_test, dx_iq_date, dx_sq, dx_sq_test, dx_sq_date)
+      rc = $writefile(BatchFile, OutRec)
 
-   'update batch stats
-   DiagCount++
-   Transcount++
-
-   'build the batch transaction
-   outrec = ""
-
-   'line 1
-   phys_rec_num = 1
-
-   outrec += addfield(COMPCODE, "999")
-   outrec += addfield(rec_type_dx, "9")
-   outrec += addfield(trans_code_dx, "99")
-   outrec += addfield(trans_vers_dx, "~")
-   outrec += addfield(Transcount, "999999")
-   outrec += addfield(phys_rec_num, "99")
-   outrec += addfield(BATCHNO, "~~")
-   outrec += addfield(trans_date, "YYYYMMDD")
-   outrec += addfield(USERID, "~~~~~")
-   outrec += addfield(client-id, "~~~~~~~~~~")
-   outrec += addfield(client_careid, "~~~~~~~~~~")
-   outrec += addfield(client_last, "~~~~~~~~~~~~~~~~")
-   outrec += addfield(client_sufx, "~~~")
-   outrec += addfield(client_first, "~~~~~~~~~~~")
-
-   outrec = StrPad(outrec, 80, " ")
-   rc = $writefile(BatchFile, OutRec)
-
-   'line 2
-   phys_rec_num++
-   outrec = ""
-
-   outrec += addfield(COMPCODE, "999")
-   outrec += addfield(rec_type_dx, "9")
-   outrec += addfield(trans_code_dx, "99")
-   outrec += addfield(trans_vers_dx, "~")
-   outrec += addfield(Transcount, "999999")
-   outrec += addfield(phys_rec_num, "99")
-   outrec += addfield(client_middle, "~~~~~~~~~~")
-   outrec += addfield(dx_date, "YYYYMMDD")
-   outrec += addfield(dx_time, "HHMM")
-   outrec += addfield(dx_reason, "~")
-   outrec += addfield(dx_primary, "~")
-   this_rec = 0
-   outrec += addfield(axis1[++this_rec], "~~~~~~~")
-   outrec += addfield(axis1[++this_rec], "~~~~~~~")
-   outrec += addfield(axis1[++this_rec], "~~~~~~~")
-   outrec += addfield(axis1[++this_rec], "~~~~~~~")
-   outrec += addfield(axis1[++this_rec], "~~~~~~~")
-
-
-   outrec = StrPad(outrec, 80, " ")
-   rc = $writefile(BatchFile, OutRec)
-
-   'line 3
-   phys_rec_num++
-   outrec = ""
-
-   outrec += addfield(COMPCODE, "999")
-   outrec += addfield(rec_type_dx, "9")
-   outrec += addfield(trans_code_dx, "99")
-   outrec += addfield(trans_vers_dx, "~")
-   outrec += addfield(Transcount, "999999")
-   outrec += addfield(phys_rec_num, "99")
-   'finish off the record we started in the last physical record
-   outrec += addfield(axis1[++this_rec], "~~~~~~~")
-
-   this_rec = 0
-   outrec += addfield(axis2[++this_rec], "~~~~~~~")
-   outrec += addfield(axis2[++this_rec], "~~~~~~~")
-   outrec += addfield(axis2[++this_rec], "~~~~~~~")
-   outrec += addfield(axis2[++this_rec], "~~~~~~~")
-
-   outrec += addfield("", "~~~~~~~~~~~~~~~")                'filler
-   outrec += addfield(dx_abl_cur, "~")
-   outrec += addfield(dx_abl_pot, "~")
-   outrec += addfield(dx_aamd_1, "~~~")
-   outrec += addfield(dx_aamd_2, "~~~")
-   outrec += addfield(dx_aamd_3, "~~~")
-   outrec += addfield(dx_aamd_gen, "~~")
-   outrec += addfield(dx_aamd_anom, "~~")
-
-   outrec = StrPad(outrec, 80, " ")
-   rc = $writefile(BatchFile, OutRec)
-
-   'line 4
-   phys_rec_num++
-   outrec = ""
-
-   outrec += addfield(COMPCODE, "999")
-   outrec += addfield(rec_type_dx, "9")
-   outrec += addfield(trans_code_dx, "99")
-   outrec += addfield(trans_vers_dx, "~")
-   outrec += addfield(Transcount, "999999")
-   outrec += addfield(phys_rec_num, "99")
-   outrec += addfield(dx_aamd_sens, "~~")
-   outrec += addfield(dx_aamd_prec, "~~")
-   outrec += addfield(dx_aamd_conv, "~~")
-   outrec += addfield(dx_aamd_phys, "~~")
-   outrec += addfield(dx_aamd_moto, "~~")
-   outrec += addfield(dx_aamd_mloc, "~")
-   outrec += addfield(dx_aamd_msev, "~")
-   outrec += addfield(dx_aamd_date, "YYYYMMDD")
-   outrec += addfield(dx_iq, "999")
-   outrec += addfield(dx_iq_test, "99")
-   outrec += addfield(dx_iq_date, "YYYYMMDD")
-   outrec += addfield(dx_sq, "999")
-   outrec += addfield(dx_sq_test, "99")
-   outrec += addfield(dx_sq_date, "YYYYMMDD")
-   outrec += addfield(dx_aamd_vers, "~~")
-   outrec += addfield(dx_axis_vers, "~~")
-   outrec += addfield(dx_axis3_vers, "~~")
-   outrec += addfield(dx_gaf_cur, "~~")
-   outrec += addfield(dx_gaf_pre, "~~")
-   if dx_4_j dp then
-      if dx_4_j = "Y" then
-         dx_4_j = "J"
+      if MarkRecordSent = "Y" then
+         lib-dx:MarkAsBatched(client-id, $today, dx_rec)
       endif
-      outrec += addfield(dx_4_j, "~")
-   else
-      if dx_4_a = "Y" then
-         dx_4_a = "A"
-      endif
-      outrec += addfield(dx_4_a, "~")
-
-      if dx_4_b = "Y" then
-         dx_4_b = "B"
-      endif
-      outrec += addfield(dx_4_b, "~")
-
-      if dx_4_c = "Y" then
-         dx_4_c = "C"
-      endif
-      outrec += addfield(dx_4_c, "~")
-
-      if dx_4_d = "Y" then
-         dx_4_d = "D"
-      endif
-      outrec += addfield(dx_4_d, "~")
-
-      if dx_4_e = "Y" then
-         dx_4_e = "E"
-      endif
-      outrec += addfield(dx_4_e, "~")
-
-      if dx_4_f = "Y" then
-         dx_4_f = "F"
-      endif
-      outrec += addfield(dx_4_f, "~")
-
-      if dx_4_g = "Y" then
-         dx_4_g = "G"
-      endif
-      outrec += addfield(dx_4_g, "~")
-
-      if dx_4_H = "Y" then
-         dx_4_H = "H"
-      endif
-      outrec += addfield(dx_4_h, "~")
-
-      if dx_4_i = "Y" then
-         dx_4_i = "I"
-      endif
-      outrec += addfield(dx_4_i, "~")
-   endif
-
-   outrec = StrPad(outrec, 80, " ")
-   rc = $writefile(BatchFile, OutRec)
-
-   'line 5
-   phys_rec_num++
-   outrec = ""
-
-   outrec += addfield(COMPCODE, "999")
-   outrec += addfield(rec_type_dx, "9")
-   outrec += addfield(trans_code_dx, "99")
-   outrec += addfield(trans_vers_dx, "~")
-   outrec += addfield(Transcount, "999999")
-   outrec += addfield(phys_rec_num, "99")
-   this_rec = 0
-   outrec += addfield(axis3[++this_rec], "~~~~~~~")
-   outrec += addfield(axis3[++this_rec], "~~~~~~~")
-   outrec += addfield(axis3[++this_rec], "~~~~~~~")
-   outrec += addfield(axis3[++this_rec], "~~~~~~~")
-   outrec += addfield(axis3[++this_rec], "~~~~~~~")
-   outrec += addfield(axis3[++this_rec], "~~~~~~~")
-
-   outrec += addfield(dx_date, "YYYYMMDD")
-
-   outrec = StrPad(outrec, 80, " ")
-   rc = $writefile(BatchFile, OutRec)
-
-   if MarkRecordSent = "Y" then
-      lib-dx:MarkAsBatched(client-id, $today, dx_rec)
    endif
 goback
 
@@ -448,15 +163,7 @@ _init:
       parmfile = CN_DefaultParm
    endif
 
-   'set defaults
-   icd10_date = CN_icd10_date
-   rec_type_dx = CN_rec_type_dx '1
-   trans_code_dx = CN_trans_code_dx '15
-   trans_date = $today
-
-   dx_aamd_vers = CN_aamd_vers '"77"
-   trans_vers_dx = CN_trans_vers_dx '"C"
-
+   skipoperio = "N"
    BatchFilename  = "/c0/carebatch/tempbatch"   ' Define File Name and Path
 
    dx_library = "lib_DX10"
@@ -481,6 +188,10 @@ _init:
    if USERID !dp then
       $errmsg1 = "Care User Not Defined"
       return
+   endif
+
+   if BATCHNO !dp then
+      $errmsg1 = "Batch Number Not Defined"
    endif
 
    if BatchFilename !dp then
@@ -511,15 +222,11 @@ _init:
    ClCount        = 0             ' Initialize Client Count
    lock-idx       = 0
 
-   oneyear = $today - 365
+   'oneyear = $today - 365
    $clear(LockReg[])
 
    ' Open Output File
    BatchFile      = $fileavail()                ' Get Available File Number
-
-   if $sysname != CN_ProdSys then
-      BatchFilename = "/tmp/tempbatch"
-   endif
 
    'retcode = $openfile(Batchfile, BatchFilename, "O")
    retcode = $openfile(Batchfile, BatchFilename, "E")
@@ -530,7 +237,7 @@ _init:
    endif
 
    ' Open a window & prompt for user input
-   if $operioallow = "Y" then
+   if $operioallow = "Y" and skipoperio != "Y" then
       $openwin(win, 1, 24, 1, 80)
       $disp("DX Batch Processor", 2, 25, ,"H")
       $disp("This script prepares the DX batch body for submission", 4, 15)
@@ -551,40 +258,7 @@ _init:
    endif
 goback
 
-
-
 end dx-batch
 
 %include inc_GetParm
 %include inc_GetOption
-
-'StrPad: << To pad a string with a certain character if it's less than
-'  the specified length
-'
-' returns: padded string
-dynamic FUNCTION StrPad(str,len,chr) is x
-   str      is x
-   len      is b
-   chr      is x
-   i        is i
-
-   if str !dp then return endif
-   if len !dp then len = 80 endif
-   if chr !dp then chr = " " endif
-
-   StrPad = str
-   i = len - $len(str)
-   if i > 0 then
-      StrPad += $mchar(chr,i)
-   endif
-
-end StrPad
-
-dynamic function addfield(value, formatstr) is x
-value       is v
-formatstr   is x
-
-addfield = $formatf(value, formatstr)
-
-end addfield
-
