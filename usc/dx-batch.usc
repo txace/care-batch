@@ -78,13 +78,12 @@ return
 '--------------------------------------
 _main:
    client-id = start_id 
+   ClCount++
 
    (void) $dbstart(02, client-id)              ' Get the first real ID in DB
    retcode = $dbread(02, client-id, c.reg.sub, c.ln, c.fn, c.mn, c.suffix, c.careid)
 
    do while (retcode < 3 or retcode = 4)
-
-      ClCount++
 
       client_careid = c.careid
       client_last   = c.ln
@@ -104,6 +103,7 @@ _main:
          gosub ICD10
       endif
 
+      ClCount++
       if regid[] dp then
          client-id = regid[ClCount]
          retcode = $dbread(02, client-id, c.reg.sub, c.ln, c.fn, c.mn, c.suffix, c.careid)

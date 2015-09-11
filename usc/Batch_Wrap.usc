@@ -121,6 +121,12 @@ if tracefile dp
 	$trace("path.on", tracefile)
 endif
 
+'build the unix cmds
+fold   = "fold -bw80 " + SEQOUT + " > " + tempfile + " ; cp " + tempfile + " " + SEQOUT 
+catjcl = "(echo | cat " + jcl_file + " " + SEQOUT + ") > " + tempfile + " ; cp " + tempfile + " " + SEQOUT 
+archive = "mv " + SEQOUT + " " + historydir + "TXFile" + day + month + year
+perl = "cd " + batchdir + ";perl -p -e 's/\n/\r\n/' < " + tracefile2 + " > Tempfile;mv Tempfile " + tracefile2
+
 'Check if our TXFile is still in the carebatch directory, we don't want to accidetly over write a batch file that has not been
 'submitted and subsequently archived.
 rc3 = $checkfile(SEQOUT)
