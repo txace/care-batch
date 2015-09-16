@@ -1,96 +1,134 @@
-**************                                                                  
-*Parameters needed for the Batch_Wrap script                                    
-*    The Parm SEQOUT is needed for BOTH the Wrapper Script and the TXBATCH5     
-*    Program.  This is the path and location where the CMHC Batch file will be  
-*    created.                                                                   
-SEQOUT /c0/EXPORT/carebatch/TXFile                                              
+*CARE Batch Parmfile                                                            
 *                                                                               
-*    Path to the carebatch workign directory                                    
-batchdir /c0/EXPORT/carebatch/                                                  
+*This parmfile is divied into sections that:                                    
+*       1.      Launch the Script/Batch process                                 
+*       2.      Determine if/when the process should run                        
+*       3.      Determine if the process should be run in live vs report only mo
+*       4.      Define file and path locations for the scripts and programs     
+*       5.      Define the things necessary to submit the file.                 
+*       6.      Any Pre/Post scripts desired.  Note, the ICD-10 creation process
+*               is a post script.                                               
+*               7.      Specific Parms for the dx-batch script that determine th
+*               the behavior of this script.                                    
+*       8.      Idenifying Center and Batch                                     
+*       9.      Parms specifically needed for the TXBATCH program.              
+*               This section will "almost" be a copy and paste from our existing
+*               TXBATCH parmfile                                                
+********************************************************************************
+*       1.      Launch the Script/Batch process                                 
+*       for executing from a menu                                               
+SCRIPT Batch_Wrap(TXB2015)                                                      
+********************************************************************************
+*       2.      Determine if/when the process should run                        
 *                                                                               
+***************This section is optional but listing any CARE Batch holidays will
+***************Prevent a batch from being submitted on that date.               
+holidays-1 09/07/2015                                                           
+holidays-2 11/26/2015                                                           
+holidays-3 11/27/2015                                                           
+holidays-4 12/24/2015                                                           
+holidays-5 12/25/2015                                                           
+holidays-6 01/01/2016                                                           
+********************************************************************************
+*                                                                               
+*       3.      Report Only or Live Mode                                        
+*       NOTE:  If MarkRecordSent is N, then REPORTONLY MUST be uncommented and  
+*              LIVEONLY must be commented.  Likewise if MarkRecordSent is Y,    
+*              then LIVEONLY must be uncommented and REPORTONLY must be         
+*              commented.                                                       
+*                                                                               
+MarkRecordSent N                                                                
+REPORTONLY                                                                      
+*LIVEONLY                                                                       
+*                                                                               
+********************************************************************************
+*       4.      Define file and path locations for the scripts and programs     
+*                                                                               
+*       To create one file, these should point to the same path & filename      
+*       If the path and filename on the two parms below are different,          
+*       the process will create two batch files.                                
+SEQOUT /c4/EXPORT2/whaiter/TXFile                                               
+batchfilename /c4/EXPORT2/whaiter/TXFile                                        
+*    Path to the carebatch working directory                                    
+batchdir /c4/EXPORT2/whaiter/                                                   
 *    Path to the directory where submitted carebatch files will be archived     
-historydir /c0/EXPORT/carebatch/hx/                                             
-*                                                                               
+historydir /c4/EXPORT2/whaiter/hx/                                              
 *    Path and filename of the file containing the production JCL to be          
 *    Prepended to the batchfile prior to submission                             
-jcl_file /c0/EXPORT/carebatch/jcl/JCLProd.txt                                   
-*                                                                               
+jcl_file /c4/EXPORT2/whaiter/jcl/JCLProd.txt                                    
 *       Path and filename of the tracefile.  If no tracefile is wanted, do not  
-*       define the tracefile (ie.  traacefile)                                  
-tracefile /c0/EXPORT/carebatch/CareTrace.txt                                    
+*       define the tracefile (ie.  traacefile). For now, both the full path     
+*       and just the tracefile name need to be defined.  If not defined, no     
+*       tracefile will be created.                                              
+tracefile /c4/EXPORT2/whaiter/CareTrace.txt                                     
 tracefile2 CareTrace.txt                                                        
+********************************************************************************
+*       5.      Define the things necessary to submit the file.                 
 *                                                                               
 *       If submitfile is set to N or is not defined, the file will not be submit
 submitfile N                                                                    
 *                                                                               
 *       the ftp site to submit the files to                                     
-remote-sys hhsibmprod.hhsc.texas.gov                                            
+remote_sys hhsibmprod.hhsc.texas.gov                                            
 *                                                                               
-*       The ftp commands to correctly submit the file to the site               
-ftpcmd-1 as                                                                     
-ftpcmd-2 site filetype=jes                                                      
-ftpcmd-3 put TXFile                                                             
-ftpcmd-4 quit                                                                   
-*                                                                               
+*       Who to notify after the batch has errors                                
+ITnotify-1 whaiter@helenfarabee.org                                             
+*ITnotify-2                                                                     
 *       Who to notify after the batch process completes                         
 notify-1 whaiter@helenfarabee.org                                               
-*                                                                               
-*Any Prescripts to run pror to creating the CMHC Batch.                         
+*notify-2                                                                       
+********************************************************************************
+*       6.      Any Pre/Post scripts desired.  Note, the ICD-10 creation process
+*               is a post script.                                               
+*        Any Prescripts to run pror to creating the CMHC Batch.                 
 Prescript-1 PPSL_LIST                                                           
+*Prescript-2 <<Whatever other scripts you need>                                 
 *                                                                               
+*        Any Postscripts to run after creating the CMHC Batch.                  
+*        The uScript needed to create the ICD-10 batch is a post script.  But   
+*        others can be added if desired                                         
 *                                                                               
-**************                                                                  
+Postscript-1 dx-batch                                                           
+*Postscript-2 <Any other post scripts desired>                                  
+*                                                                               
+********************************************************************************
 * TX CARE BATCH - REGISTRATION, DIAGNOSIS, & COMMUNITY BASED ASSIGNMENTS        
 * 07/07/2004 R. Whaite                                                          
 *--------------------------------------------------------------------*          
-*************                                                                   
-*Section Needed for the tx-batch script to create the ICD-10 Batch              
+********************************************************************************
+*               7.      Specific Parms for the dx-batch script that determine th
+*               the behavior of this script.  Section Needed                    
+*               for the tx-batch script to create the ICD-10 Batch              
 *                                                                               
-* parmfile for dx-batch script                                                  
+*        limit the number for registers for testing                             
+*        set to 0 to run all clients                                            
+*reg_limit 13000                                                                
 *                                                                               
-* for executing from a menu                                                     
-SCRIPT dx-batch(TXB2015)                                                        
+*        Change this for testing icd 10 codes prior to go live                  
+*icd10_date 8/1/2015  Now controlled by a define statement in lib_DX10          
 *                                                                               
-* limit the number for registers for testing                                    
-* set to 0 to run all clients                                                   
-reg_limit 13000                                                                 
-*                                                                               
-* Change this for testing icd 10 codes prior to go live                         
-icd10_date 10/1/2015                                                            
-*                                                                               
-* Change to generate a batch without updating dx records                        
-MarkRecordSent N                                                                
-*                                                                               
-* trace the exectuion                                                           
-*trace_path /c4/EXPORT2/whaiter/trace.txt                                       
-*                                                                               
-* enter your orgs component code                                                
-comp_code 230                                                                   
-*                                                                               
-* enter your submission care id                                                 
-care_userid BATCH                                                               
-*                                                                               
-* some dsts to map                                                              
-* Make sure your dst names are CAPITALIZED                                      
+*               some dsts to map                                                
+*               Make sure your dst names are CAPITALIZED                        
 MAP_c.suffix                                                                    
 MAP_c.reg.sub C.TXB.REG.FLG                                                     
 *                                                                               
 * if you don't have a careid dst then map leave the mapping blank               
 MAP_c.careid                                                                    
 *                                                                               
-* path to the batch file                                                        
-* NOTE * Since dx-batch is designed to work                                     
-* with the care-batch / other scripts the batch                                 
-* file is open in 'extend' mode - meaning that                                  
-* a file will be created if there is not one,                                   
-* but if there is one the file will be APPENDED                                 
-* with by dx-batch                                                              
-batchfilename /c4/EXPORT2/whaiter/batch.test                                    
-*                                                                               
-* set the Transaction count starting point                                      
+*        set the Transaction count starting point                               
 TransCount 0                                                                    
 *                                                                               
-*************                                                                   
+********************************************************************************
+*       8.      Idenifying Center, Batch AND FTP remote host                    
+* enter your orgs component code                                                
+COMPCODE 230                                                                    
+BATCHNO T1                                                                      
+USERID BATCH                                                                    
+*                                                                               
+********************************************************************************
+*       9.      Parms specifically needed for the TXBATCH program.              
+*               This section will "almost" be a copy and paste from our existing
+*               TXBATCH parmfile                                                
 *                                                                               
 *        TEXAS SERVIC ACTIVITY SYSTEM TAPE PARAMETER FILE            *          
 *                                                                    *          
@@ -99,16 +137,16 @@ AA..BBB..CCCCD..EEEEEEEEX FFFFFFFF  GGGGGGGG  HHHH I                 *
 TC FIELD  DST*   OUTPUT    INPUT   RECORD TBL DCT  O  COMMENTS       *          
 -- ----  -----  --------- -------  ---------- ---  -  ---------------*          
 *------------------- Here is the Specifications -----------------*              
-*REPORTONLY                                                                     
+*REPORTONLY  (Moved to Section 3 of Parm)                                       
+*LIVEONLY    (Moved to Section 3 of Parm)                                       
 TESTOUT Y                                                                       
 CLLIST PPSL                                                                     
-COMPCODE 230                                                                    
-BATCHNO Z1                                                                      
+*COMPCODE 230 (Moved to Section 8 of Parm)                                      
+*BATCHNO Z1   (Moved to Section 8 of Parm)                                      
 TRLVERSION A                                                                    
-USERID BATCH                                                                    
+*USERID BATCH (Moved to Section 8 of Parm)                                      
 PQOUT N                                                                         
-*SEQOUT /c0/EXPORT/trace/TXFile                                                 
-SEQOUT /c0/EXPORT/carebatch/TXFile                                              
+*SEQOUT /c0/EXPORT/trace/TXFile  (Moved to Section 4 of ParmFile)               
 REFLAGDST 858                                                                   
 *-----------------REGISTRATION CHANGE                                           
 RCRECHDR 6790                                                                   
