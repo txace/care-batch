@@ -1,7 +1,7 @@
 '********************************************************************************************
 'AUTHOR: Ralph Whaite
 'DATE: 08-27-2015                                                                            *
-%version 01.00 08/27/2015                                                                 
+%version 01.00 09/16/2015                                                                 
 '********************************************************************************************
 'Based on TXBATCH
 'AUTHOR: Chris Love                                                                         *
@@ -16,15 +16,17 @@ option            is x     ' Parameters for script behavior (Separated by semico
 retcode           is b     ' Returned code for script execution (non-zero indicates error)
 
 
-SEQOUT     is x SEQOUT     = "/c0/EXPORT/carebatch/TXFile"
-batchdir   is x batchdir   = "/c0/EXPORT/carebatch/"
-historydir is x historydir = "/c0/EXPORT/carebatch/hx/"
-jcl_file   is x jcl_file   = "/c0/EXPORT/carebatch/jcl/JCLProd.txt"
-tracefile  is x tracefile  = "/c4/EXPORT2/whaiter/CareTrace.txt"
-tracefile2 is x tracefile2 = "CareTrace.txt"
-remote-sys is x remote-sys = "hhsibmprod.hhsc.texas.gov"
+SEQOUT     is x 
+batchdir   is x 
+historydir is x 
+jcl_file   is x 
+tracefile  is x 
+tracefile2 is x 
+remote_sys is x 
 submitfile is x submitfile = "N"
-COMPCODE   is x COMPCODE   = "230"
+COMPCODE   is x 
+USERID     is x
+BATCHNO    is x
 footertxt  is x              'Text String for footer record
 FileNum		 is b							 'File Handle for adding footer record
 CLLIST		 is x							 'Saved List ID fromt he parm file.  
@@ -121,6 +123,44 @@ if tracefile dp
 	$trace("path.on", tracefile)
 endif
 
+   if COMPCODE !dp then
+      $errmsg1 = "Component Code Not Defined - COMPCODE"
+      return
+   endif
+
+   if USERID !dp then
+      $errmsg1 = "Care User Not Defined - USERID"
+      return
+   endif
+
+   if remote_sys !dp then
+      $errmsg1 = "Remote System Not Defined - remote_sys"
+      return
+   endif
+
+   if jcl_file !dp then
+      $errmsg1 = "JCL File Not Defined - jcl_file"
+      return
+   endif
+
+   if historydir !dp then
+      $errmsg1 = "History Directory Not Defined - historydir"
+      return
+   endif
+
+   if batchdir !dp then
+      $errmsg1 = "Batch Directory Not Defined - batchdir"
+      return
+   endif
+
+   if BATCHNO !dp then
+      $errmsg1 = "Batch Number Not Defined - BATCHNO"
+   endif
+
+   if SEQOUT !dp then
+      $errmsg1 = "Batchfile not Defined - SEQOUT"
+   endif
+
 'build the unix cmds
 fold   = "fold -bw80 " + SEQOUT + " > " + tempfile + " ; cp " + tempfile + " " + SEQOUT 
 catjcl = "(echo | cat " + jcl_file + " " + SEQOUT + ") > " + tempfile + " ; cp " + tempfile + " " + SEQOUT 
@@ -184,7 +224,7 @@ if $operioallow = "Y" then
 endif
 
 if submitfile = "Y"
-   ftp = $ftp(ftpcmd[4], remote-sys, login-id, login-passwd, batchdir, remote-dir)  
+   ftp = $ftp(ftpcmd[4], remote_sys, login-id, login-passwd, batchdir, remote-dir)  
 else
    ftp = 0
 endif
@@ -267,7 +307,7 @@ ftpcmd[3] = "put " + SEQOUT
 ftpcmd[4] = "quit"
 
 if submitfile = "Y"
-   rc = $ftp(ftpcmd[], remote-sys, login-id, login-passwd, batchdir, remote-dir)
+   rc = $ftp(ftpcmd[], remote_sys, login-id, login-passwd, batchdir, remote-dir)
 else
    rc = 0
 endif
