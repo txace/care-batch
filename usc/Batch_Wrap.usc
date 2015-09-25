@@ -302,7 +302,7 @@ endif
  (void)$unix(catjcl)
 
 ftpcmd[1] = "as"
-ftpcmd[2] = "filetype=jes"
+ftpcmd[2] = "site filetype=jes"
 ftpcmd[3] = "put " + SEQOUT
 ftpcmd[4] = "quit"
 
