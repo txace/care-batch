@@ -241,6 +241,7 @@ endif
 'See if a list ID was defined in the parfile.  If yes, put that client list into an array to hand to dx-batch.
  if CLLIST dp
  	rc = $getlist(cltlist[],2,CLLIST)
+ 	(void)$sortu(cltlist[])
  endif
 
  'See if any Prescripts and defined and call them in order
@@ -251,10 +252,11 @@ endif
  do while c++ < PreCount
   call PreScript[c](parmfile,option,cltlist[],retcode)
  enddo
- $trace("on") 
+' $trace("on") 
 
  'update the CLLIST with anything the PreScripts might have changed
  if CLLIST dp then
+    (void)$sortu(cltlist[])
     rc = $putlist(cltlist[], 2, CLLIST, ,"R")
  endif
 
@@ -288,7 +290,7 @@ endif
 'See if any Prescripts and defined and call them in order
  c = 0
  PostCount = $maxarray(PostScript[])
- $trace("off")
+ '$trace("off")
  do while c++ < PostCount
  	call PostScript[c](parmfile,option,cltlist[],retcode)
  enddo
